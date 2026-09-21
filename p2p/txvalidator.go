@@ -116,7 +116,16 @@ func NewTxValidator(opts TxValidatorOptions) (*TxValidator, error) {
 		v.minGasPrice = new(big.Int).Set(opts.MinGasPrice)
 	}
 	if opts.MinBaseFeeRatio > 0 {
-		v.baseFeeRatio = big.NewInt(int64(opts.MinBaseFeeRatio * baseFeeRatioScale))
+		// Rounded, not truncated: int64(0.0019 * 1000) is 1, which is a 0.1%
+		// floor rather than the 0.2% asked for. The zero check below is what
+		// stops a ratio under half a scale step from turning the check into a
+		// silent no-op while the caller believes it is enabled.
+		scaled := int64(math.Round(opts.MinBaseFeeRatio * baseFeeRatioScale))
+		if scaled == 0 {
+			return nil, fmt.Errorf("base fee ratio %v is below the smallest representable value %v",
+				opts.MinBaseFeeRatio, 1.0/baseFeeRatioScale)
+		}
+		v.baseFeeRatio = big.NewInt(scaled)
 	}
 
 	return v, nil
@@ -204,18 +213,28 @@ func RejectReason(err error) string {
 	}
 }
 
-// broadcastChainConfig builds a permissive chain config for the given chain ID:
-// every fork through Prague is active from genesis. Validate zeroes the header
-// difficulty so the timestamp-scheduled forks in here actually take effect.
+// broadcastChainConfig builds a chain config for the given chain ID with every
+// fork through Prague active from genesis. Validate zeroes the header difficulty
+// so the timestamp-scheduled forks in here actually take effect.
 //
-// The sensor does not know its chain's fork schedule (it only knows the network
-// ID and a fork ID hash), and this config is used solely to decide what to
-// forward. Being generous about which transaction types are legal is the safe
-// direction: the cost of accepting a type the chain has not enabled yet is one
-// rebroadcast, whereas pinning an older fork set would silently stop forwarding
-// legitimate traffic -- every EIP-7702 transaction, for instance. Osaka and
-// later are left off so their tighter caps do not reject transactions the chain
-// still accepts.
+// The sensor does not know its chain's fork schedule -- it knows a network ID
+// and a fork ID hash, neither of which yields one -- so this is an assumption,
+// and it is the assumption that a chain the sensor is pointed at is current.
+//
+// IT IS NOT A PURELY PERMISSIVE ONE. Later forks add transaction types, which
+// only ever costs an over-accept, but they also tighten: Shanghai caps init code
+// size (EIP-3860) and Prague adds the calldata floor gas cost (EIP-7623). On a
+// chain that has not adopted those, a large deployment or a calldata-heavy
+// transaction is legal there and dropped here, showing up as
+// init_code_too_large or intrinsic_gas.
+//
+// Prague is still the right floor for the networks this targets -- Polygon since
+// Bhilai, Ethereum since Pectra -- and pinning an older fork set has the larger
+// failure mode, silently dropping every EIP-7702 transaction as an unsupported
+// type. Osaka and later are left off because their caps (MaxTxGas, Amsterdam's
+// floor gas rules) would tighten further against chains that have not taken
+// them. An operator on a pre-Prague chain should expect those two rejection
+// reasons and turn validation off, or the floors down, accordingly.
 func broadcastChainConfig(chainID uint64) *params.ChainConfig {
 	zero := uint64(0)
 	return &params.ChainConfig{

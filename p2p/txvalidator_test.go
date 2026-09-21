@@ -386,3 +386,30 @@ func TestRejectReasonUnknownErrors(t *testing.T) {
 		t.Fatalf("unmapped error: want other, got %q", got)
 	}
 }
+
+// TestNewTxValidatorRejectsUnrepresentableRatio covers a base fee ratio that
+// would round to zero in fixed point: it must be reported rather than silently
+// turning the check into a no-op.
+func TestNewTxValidatorRejectsUnrepresentableRatio(t *testing.T) {
+	if _, err := NewTxValidator(TxValidatorOptions{ChainID: testChainID, MinBaseFeeRatio: 0.0004}); err == nil {
+		t.Fatal("ratio below one scale step: want error, got nil")
+	}
+
+	// Just above half a step rounds up to 1/1000 and is honoured.
+	v, err := NewTxValidator(TxValidatorOptions{ChainID: testChainID, MinBaseFeeRatio: 0.0006})
+	if err != nil {
+		t.Fatalf("smallest representable ratio: %v", err)
+	}
+	if v.baseFeeRatio == nil || v.baseFeeRatio.Int64() != 1 {
+		t.Fatalf("want scaled ratio 1, got %v", v.baseFeeRatio)
+	}
+}
+
+// TestValidateBaseFeeRatioRounds pins the rounding: truncation would turn a
+// 0.0019 ratio into 0.001, applying half the floor the operator asked for.
+func TestValidateBaseFeeRatioRounds(t *testing.T) {
+	v := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 0.0019})
+	if got := v.baseFeeRatio.Int64(); got != 2 {
+		t.Fatalf("want scaled ratio 2, got %d", got)
+	}
+}

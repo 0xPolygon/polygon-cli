@@ -124,6 +124,25 @@ same checks `go-ethereum` applies before a transaction enters its pool:
 Nonce and balance are deliberately not checked. The sensor holds no chain state,
 and those checks would cost an RPC round trip per sender.
 
+The head block gates two of those checks (gas limit, base fee) and the head is
+peer-supplied, so `UpdateHeadBlock` only accepts a block whose signer is in the
+validator set when one is configured (`--validate-block-signer`). Without that,
+a peer could declare a head with an absurd base fee and have every honest
+transaction rejected. On a chain with no validator set the head is unguarded, as
+it was before.
+
+Fork rules are assumed current: every fork through Prague is treated as active,
+since neither `--network-id` nor `--fork-id` yields a fork schedule. Later forks
+mostly add transaction types, but two of them tighten — Shanghai caps init code
+size and Prague adds the calldata floor gas cost — so on a chain that has not
+adopted those, large deployments and calldata-heavy transactions are dropped as
+`init_code_too_large` or `intrinsic_gas`. Turn validation off on such a chain.
+
+The signer is bound to `--network-id`. On the networks this targets that is also
+the chain ID; on a chain where the two differ, every transaction fails sender
+recovery and nothing is forwarded. The sensor logs the chain ID it validates
+against at startup.
+
 Three fee floors are configurable on top of those rules:
 
 | Flag                            | Default | Effect                                                            |

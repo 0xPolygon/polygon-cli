@@ -140,7 +140,7 @@ func newMetrics() *metrics {
 		txDecodeErrors: promauto.NewCounter(prometheus.CounterOpts{
 			Namespace: "sensor",
 			Name:      "tx_decode_errors",
-			Help:      "Number of transactions received from peers that failed to decode",
+			Help:      "Number of transactions received from peers that failed to decode, from transaction messages and block bodies alike",
 		}),
 	}
 }

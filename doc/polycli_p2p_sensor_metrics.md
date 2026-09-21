@@ -95,7 +95,7 @@ Variable Labels:
 
 
 ### sensor_tx_decode_errors
-Number of transactions received from peers that failed to decode
+Number of transactions received from peers that failed to decode, from transaction messages and block bodies alike
 
 Metric Type: Counter
 

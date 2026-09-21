@@ -891,8 +891,12 @@ func (c *conn) decodeTx(raw []byte) *types.Transaction {
 }
 
 // countTxDecodeError records a transaction that arrived from a peer but could
-// not be decoded. These never reach the cache, the database or the broadcast
-// path, so this counter is the only place they are visible.
+// not be decoded, from either source that carries one: a transaction message,
+// where the transaction is dropped on its own, or a block body, where one
+// undecodable transaction makes decodeTxsStrict reject the whole block. Neither
+// reaches the cache, the database or the broadcast path, so this counter is the
+// only place they are visible -- but a spike in it is not necessarily mempool
+// spam, and the peer logs say which source it came from.
 func (c *conn) countTxDecodeError() {
 	if c.conns == nil {
 		return

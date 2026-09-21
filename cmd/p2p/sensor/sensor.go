@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"os/signal"
 	"runtime"
@@ -206,8 +207,12 @@ var SensorCmd = &cobra.Command{
 			return errors.New("--peer-snapshot-interval must be greater than zero")
 		}
 
-		if inputSensorParams.BroadcastMinBaseFeeRatio < 0 {
-			return errors.New("--broadcast-min-basefee-ratio cannot be negative")
+		// Checked here rather than left to NewTxValidator, which is only built
+		// when validation and a broadcast flag are both on: --broadcast-min-basefee-ratio NaN
+		// otherwise starts fine and is discovered by nobody.
+		if math.IsNaN(inputSensorParams.BroadcastMinBaseFeeRatio) ||
+			inputSensorParams.BroadcastMinBaseFeeRatio < 0 {
+			return errors.New("--broadcast-min-basefee-ratio must be zero or greater")
 		}
 
 		return nil
@@ -260,8 +265,20 @@ var SensorCmd = &cobra.Command{
 		// before forwarding them so peers sending junk cannot use the sensor to
 		// amplify it. Everything received is still cached and persisted.
 		var txValidator *p2p.TxValidator
-		if inputSensorParams.ValidateBroadcastTxs &&
-			(inputSensorParams.ShouldBroadcastTx || inputSensorParams.ShouldBroadcastTxHashes) {
+		broadcastingTxs := inputSensorParams.ShouldBroadcastTx || inputSensorParams.ShouldBroadcastTxHashes
+		if inputSensorParams.ValidateBroadcastTxs && broadcastingTxs {
+			// The signer is bound to --network-id, which is the chain ID on every
+			// network this targets but is not the same field. On a chain where
+			// they differ, every transaction fails sender recovery and the sensor
+			// forwards nothing while reporting 100% invalid_signature -- hence the
+			// log line rather than a silent assumption.
+			log.Info().
+				Uint64("chain_id", inputSensorParams.NetworkID).
+				Uint64("min_gas_price", inputSensorParams.BroadcastMinGasPrice).
+				Uint64("min_tip", inputSensorParams.BroadcastMinTip).
+				Float64("min_basefee_ratio", inputSensorParams.BroadcastMinBaseFeeRatio).
+				Msg("Validating transactions before rebroadcast, using the network ID as the chain ID")
+
 			txValidator, err = p2p.NewTxValidator(p2p.TxValidatorOptions{
 				ChainID:         inputSensorParams.NetworkID,
 				MinGasPrice:     new(big.Int).SetUint64(inputSensorParams.BroadcastMinGasPrice),
@@ -271,6 +288,10 @@ var SensorCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to create transaction validator: %w", err)
 			}
+		} else if !broadcastingTxs {
+			log.Info().Msg("Transaction rebroadcasting is off, transaction validation flags have no effect")
+		} else {
+			log.Warn().Msg("Rebroadcasting transactions without validation, peers can use this sensor to amplify invalid transactions")
 		}
 
 		// Create peer connection manager for broadcasting transactions
