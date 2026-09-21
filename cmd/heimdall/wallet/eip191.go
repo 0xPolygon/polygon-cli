@@ -19,7 +19,7 @@ const personalSignPrefix = "\x19Ethereum Signed Message:\n"
 // Matches the hash that MetaMask, ethers.js, viem, cast, and all other
 // mainstream Ethereum tooling use for message signing.
 func personalSignHash(message []byte) []byte {
-	prefix := []byte(fmt.Sprintf("%s%d", personalSignPrefix, len(message)))
+	prefix := fmt.Appendf(nil, "%s%d", personalSignPrefix, len(message))
 	payload := append(prefix, message...)
 	return crypto.Keccak256(payload)
 }
