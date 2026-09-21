@@ -103,10 +103,10 @@ same checks `go-ethereum` applies before a transaction enters its pool:
 Nonce and balance are deliberately not checked. The sensor holds no chain state,
 and those checks would cost an RPC round trip per sender.
 
-The head block gates two of those checks (gas limit, base fee) and the head is
-peer-supplied, so `UpdateHeadBlock` only accepts a block whose signer is in the
-validator set when one is configured (`--validate-block-signer`). Without that,
-a peer could declare a head with an absurd base fee and have every honest
+The head block gates the gas limit check and supplies the fork rules, and the
+head is peer-supplied, so `UpdateHeadBlock` only accepts a block whose signer is
+in the validator set when one is configured (`--validate-block-signer`). Without
+that, a peer could declare a head with a gas limit of zero and have every honest
 transaction rejected. On a chain with no validator set the head is unguarded, as
 it was before.
 
@@ -122,13 +122,27 @@ the chain ID; on a chain where the two differ, every transaction fails sender
 recovery and nothing is forwarded. The sensor logs the chain ID it validates
 against at startup.
 
-Three fee floors are configurable on top of those rules:
+Two fee floors are configurable on top of those rules, mirroring the two bor
+exposes:
 
-| Flag                            | Default | Effect                                                            |
-| ------------------------------- | ------- | ----------------------------------------------------------------- |
-| `--broadcast-min-basefee-ratio` | `1.0`   | Drops transactions whose fee cap is under this fraction of the head block's base fee; `1.0` means "cannot be included right now", `0` disables |
-| `--broadcast-min-gas-price`     | `0`     | Absolute floor in wei on the fee cap                               |
-| `--broadcast-min-tip`           | `0`     | Absolute floor in wei on the tip cap, equivalent to a node's `--txpool.pricelimit` |
+| Flag                        | bor equivalent         | Effect                              |
+| --------------------------- | ---------------------- | ----------------------------------- |
+| `--broadcast-min-tip`       | `--txpool.pricelimit`  | Floor in wei on the tip cap         |
+| `--broadcast-min-gas-price` | `--miner.gasprice`     | Floor in wei on the fee cap         |
+
+Both default to `0`. On Polygon both of bor's are pinned at 25 gwei by PIP-35,
+and a tip cap can never exceed its fee cap, so setting the tip floor alone is
+usually enough.
+
+There is deliberately **no base fee filter**. Bor applies none when it gossips a
+transaction it has just accepted; the base fee only gates its periodic
+re-broadcast of stuck pending transactions, which is not what the sensor is
+doing when it forwards what it just received. A fractional base fee floor was
+implemented here and removed: on ~100k mainnet transactions it accounted for 97%
+of all rejections while every other check accounted for none, so it was doing
+nearly all of the filtering while dropping transactions bor itself would have
+relayed. The sensor's head also lags the chain by a median of 2 blocks and up to
+7, so the comparison ran against a stale base fee.
 
 Validation gates rebroadcasting only. Rejected transactions are still cached,
 served on request, and written to the database, so the sensor keeps a complete

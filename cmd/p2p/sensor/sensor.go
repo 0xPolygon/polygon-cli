@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"os/signal"
 	"runtime"
@@ -69,7 +68,6 @@ type (
 		ValidateBroadcastTxs             bool
 		BroadcastMinGasPrice             uint64
 		BroadcastMinTip                  uint64
-		BroadcastMinBaseFeeRatio         float64
 		CacheOnlyValidatedBlocks         bool
 		HeimdallURL                      string
 		ValidatorSetRefresh              time.Duration
@@ -207,14 +205,6 @@ var SensorCmd = &cobra.Command{
 			return errors.New("--peer-snapshot-interval must be greater than zero")
 		}
 
-		// Checked here rather than left to NewTxValidator, which is only built
-		// when validation and a broadcast flag are both on: --broadcast-min-basefee-ratio NaN
-		// otherwise starts fine and is discovered by nobody.
-		if math.IsNaN(inputSensorParams.BroadcastMinBaseFeeRatio) ||
-			inputSensorParams.BroadcastMinBaseFeeRatio < 0 {
-			return errors.New("--broadcast-min-basefee-ratio must be zero or greater")
-		}
-
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -276,14 +266,12 @@ var SensorCmd = &cobra.Command{
 				Uint64("chain_id", inputSensorParams.NetworkID).
 				Uint64("min_gas_price", inputSensorParams.BroadcastMinGasPrice).
 				Uint64("min_tip", inputSensorParams.BroadcastMinTip).
-				Float64("min_basefee_ratio", inputSensorParams.BroadcastMinBaseFeeRatio).
 				Msg("Validating transactions before rebroadcast, using the network ID as the chain ID")
 
 			txValidator, err = p2p.NewTxValidator(p2p.TxValidatorOptions{
-				ChainID:         inputSensorParams.NetworkID,
-				MinGasPrice:     new(big.Int).SetUint64(inputSensorParams.BroadcastMinGasPrice),
-				MinTip:          new(big.Int).SetUint64(inputSensorParams.BroadcastMinTip),
-				MinBaseFeeRatio: inputSensorParams.BroadcastMinBaseFeeRatio,
+				ChainID:     inputSensorParams.NetworkID,
+				MinGasPrice: new(big.Int).SetUint64(inputSensorParams.BroadcastMinGasPrice),
+				MinTip:      new(big.Int).SetUint64(inputSensorParams.BroadcastMinTip),
 			})
 			if err != nil {
 				return fmt.Errorf("failed to create transaction validator: %w", err)
@@ -630,12 +618,9 @@ values multiply write volume by up to --max-peers rows per tick`)
 		`only rebroadcast transactions that pass stateless validation (signature, chain ID, size,
 intrinsic gas, fees); rejected transactions are still cached and written to the database`)
 	f.Uint64Var(&inputSensorParams.BroadcastMinGasPrice, "broadcast-min-gas-price", 0,
-		"minimum gas fee cap in wei a transaction must offer to be rebroadcast (0 to disable)")
+		"minimum gas fee cap in wei a transaction must offer to be rebroadcast, matching bor's --miner.gasprice (0 to disable)")
 	f.Uint64Var(&inputSensorParams.BroadcastMinTip, "broadcast-min-tip", 0,
-		"minimum gas tip cap in wei a transaction must offer to be rebroadcast (0 to disable)")
-	f.Float64Var(&inputSensorParams.BroadcastMinBaseFeeRatio, "broadcast-min-basefee-ratio", 1.0,
-		`fraction of the head block base fee a transaction fee cap must reach to be rebroadcast
-(1 drops transactions that cannot be included at the current base fee, 0 to disable)`)
+		"minimum gas tip cap in wei a transaction must offer to be rebroadcast, matching bor's --txpool.pricelimit (0 to disable)")
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")

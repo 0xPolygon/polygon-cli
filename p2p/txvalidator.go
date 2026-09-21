@@ -3,7 +3,6 @@ package p2p
 import (
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -18,15 +17,6 @@ const (
 	// transaction a node will admit to its pool, so anything larger is dead weight
 	// no matter how well formed it is.
 	maxBroadcastTxSize = 4 * 32 * 1024
-
-	// baseFeeRatioScale is the fixed-point denominator used to apply the
-	// fractional base fee floor with integer math.
-	baseFeeRatioScale = 1000
-
-	// maxBaseFeeRatio bounds --broadcast-min-basefee-ratio. Anything above a few
-	// multiples of the base fee would drop every transaction on the network, so
-	// the cap exists to catch a misconfigured flag rather than to be useful.
-	maxBaseFeeRatio = 100.0
 )
 
 // errBelowMinGasPrice is returned when a transaction's fee cap is under the
@@ -48,18 +38,25 @@ type TxValidatorOptions struct {
 	// MinTip is a floor on the transaction's gas tip cap, equivalent to a
 	// node's --txpool.pricelimit. Nil or zero disables the check.
 	MinTip *big.Int
-
-	// MinBaseFeeRatio rejects transactions whose gas fee cap is below this
-	// fraction of the head block's base fee. 1.0 drops everything that cannot be
-	// included at the current base fee; 0 disables the check.
-	MinBaseFeeRatio float64
 }
 
 // TxValidator applies the stateless half of a node's transaction admission
 // rules to transactions the sensor is about to rebroadcast.
 //
 // It deliberately does not check nonce or balance: the sensor holds no state, and
-// those checks would need an RPC round trip per sender. What it does catch is
+// those checks would need an RPC round trip per sender.
+//
+// It also does not filter on the head block's base fee. Bor applies no such
+// filter when it gossips a transaction it has just accepted (eth/handler.go
+// BroadcastTransactions walks the pool's feed unconditionally); the base fee only
+// gates its periodic re-broadcast of stuck pending transactions
+// (legacypool.identifyStuckTransactions). Forwarding what we just received is
+// the first case, not the second. A fractional base fee floor lived here for a
+// while and was removed: on ~100k mainnet transactions it produced 97% of all
+// rejections and every other check produced none, so it was doing nearly all of
+// the "spam" filtering while dropping transactions bor itself would have
+// relayed. The sensor's head also lags the chain by a median of 2 blocks and up
+// to 7, so the comparison was made against a stale base fee. What it does catch is
 // everything a peer can make up for free -- forged signatures, transactions signed
 // for another chain, oversized payloads, gas below the intrinsic cost, fee caps
 // that can never be mined -- which is the bulk of what a spamming peer sends.
@@ -69,9 +66,6 @@ type TxValidator struct {
 
 	// minGasPrice is nil when the floor is disabled.
 	minGasPrice *big.Int
-	// baseFeeRatio is the MinBaseFeeRatio scaled by baseFeeRatioScale, or nil
-	// when the check is disabled.
-	baseFeeRatio *big.Int
 }
 
 // NewTxValidator creates a transaction validator for the given chain.
@@ -85,10 +79,6 @@ func NewTxValidator(opts TxValidatorOptions) (*TxValidator, error) {
 	if opts.MinTip != nil && opts.MinTip.Sign() < 0 {
 		return nil, fmt.Errorf("minimum tip cannot be negative: %v", opts.MinTip)
 	}
-	if math.IsNaN(opts.MinBaseFeeRatio) || opts.MinBaseFeeRatio < 0 || opts.MinBaseFeeRatio > maxBaseFeeRatio {
-		return nil, fmt.Errorf("base fee ratio must be between 0 and %v: %v", maxBaseFeeRatio, opts.MinBaseFeeRatio)
-	}
-
 	config := broadcastChainConfig(opts.ChainID)
 
 	minTip := new(big.Int)
@@ -115,19 +105,6 @@ func NewTxValidator(opts TxValidatorOptions) (*TxValidator, error) {
 	if opts.MinGasPrice != nil && opts.MinGasPrice.Sign() > 0 {
 		v.minGasPrice = new(big.Int).Set(opts.MinGasPrice)
 	}
-	if opts.MinBaseFeeRatio > 0 {
-		// Rounded, not truncated: int64(0.0019 * 1000) is 1, which is a 0.1%
-		// floor rather than the 0.2% asked for. The zero check below is what
-		// stops a ratio under half a scale step from turning the check into a
-		// silent no-op while the caller believes it is enabled.
-		scaled := int64(math.Round(opts.MinBaseFeeRatio * baseFeeRatioScale))
-		if scaled == 0 {
-			return nil, fmt.Errorf("base fee ratio %v is below the smallest representable value %v",
-				opts.MinBaseFeeRatio, 1.0/baseFeeRatioScale)
-		}
-		v.baseFeeRatio = big.NewInt(scaled)
-	}
-
 	return v, nil
 }
 
@@ -160,14 +137,6 @@ func (v *TxValidator) Validate(tx *types.Transaction, head *types.Header) error 
 
 	if v.minGasPrice != nil && tx.GasFeeCapIntCmp(v.minGasPrice) < 0 {
 		return fmt.Errorf("%w: gas fee cap %v, minimum needed %v", errBelowMinGasPrice, tx.GasFeeCap(), v.minGasPrice)
-	}
-
-	if v.baseFeeRatio != nil && head.BaseFee != nil {
-		floor := new(big.Int).Mul(head.BaseFee, v.baseFeeRatio)
-		floor.Div(floor, big.NewInt(baseFeeRatioScale))
-		if tx.GasFeeCapIntCmp(floor) < 0 {
-			return fmt.Errorf("%w: gas fee cap %v, floor %v", core.ErrFeeCapTooLow, tx.GasFeeCap(), floor)
-		}
 	}
 
 	return nil
@@ -206,8 +175,6 @@ func RejectReason(err error) string {
 		return "tip_too_low"
 	case errors.Is(err, errBelowMinGasPrice):
 		return "below_min_gas_price"
-	case errors.Is(err, core.ErrFeeCapTooLow):
-		return "fee_cap_below_basefee"
 	default:
 		return "other"
 	}

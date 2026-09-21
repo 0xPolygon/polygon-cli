@@ -63,7 +63,7 @@ func TestFilterBroadcastableTxsNoValidator(t *testing.T) {
 
 func TestFilterBroadcastableTxsDropsInvalid(t *testing.T) {
 	conns := sharedTestConns(t, false)
-	withBroadcastHead(t, conns, newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 1}))
+	withBroadcastHead(t, conns, newTestValidator(t, TxValidatorOptions{}))
 
 	valid := signTx(t, testChainID, dynamicFeeTx(t))
 	forged := foreignTx(t)

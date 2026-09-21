@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"math"
 	"math/big"
 	"testing"
 
@@ -87,9 +86,6 @@ func TestNewTxValidatorRejectsBadOptions(t *testing.T) {
 		{"zero chain ID", TxValidatorOptions{}},
 		{"negative gas price", TxValidatorOptions{ChainID: testChainID, MinGasPrice: big.NewInt(-1)}},
 		{"negative tip", TxValidatorOptions{ChainID: testChainID, MinTip: big.NewInt(-1)}},
-		{"negative ratio", TxValidatorOptions{ChainID: testChainID, MinBaseFeeRatio: -1}},
-		{"ratio too large", TxValidatorOptions{ChainID: testChainID, MinBaseFeeRatio: maxBaseFeeRatio + 1}},
-		{"NaN ratio", TxValidatorOptions{ChainID: testChainID, MinBaseFeeRatio: math.NaN()}},
 	}
 
 	for _, tt := range tests {
@@ -102,7 +98,7 @@ func TestNewTxValidatorRejectsBadOptions(t *testing.T) {
 }
 
 func TestValidateAcceptsWellFormedTxs(t *testing.T) {
-	v := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 1})
+	v := newTestValidator(t, TxValidatorOptions{})
 	head := testHead()
 
 	to := common.HexToAddress("0x1234567890123456789012345678901234567890")
@@ -241,20 +237,6 @@ func TestValidateRejects(t *testing.T) {
 			inner:  dynamicFeeTx(t),
 			reason: "below_min_gas_price",
 		},
-		{
-			name: "fee cap below base fee",
-			opts: TxValidatorOptions{MinBaseFeeRatio: 1},
-			inner: &types.DynamicFeeTx{
-				ChainID:   big.NewInt(testChainID),
-				Nonce:     1,
-				GasTipCap: big.NewInt(1),
-				GasFeeCap: big.NewInt(24_999_999_999),
-				Gas:       21_000,
-				To:        &to,
-				Value:     big.NewInt(1),
-			},
-			reason: "fee_cap_below_basefee",
-		},
 	}
 
 	for _, tt := range tests {
@@ -273,32 +255,6 @@ func TestValidateRejects(t *testing.T) {
 				t.Fatalf("want reason %q, got %q (%v)", tt.reason, got, err)
 			}
 		})
-	}
-}
-
-// TestValidateBaseFeeRatio checks the fractional floor, which lets an operator
-// keep forwarding transactions that are slightly under the current base fee.
-func TestValidateBaseFeeRatio(t *testing.T) {
-	to := common.HexToAddress("0x1234567890123456789012345678901234567890")
-	// Head base fee is 25 gwei, so a 0.5 ratio puts the floor at 12.5 gwei.
-	tx := signTx(t, testChainID, &types.DynamicFeeTx{
-		ChainID:   big.NewInt(testChainID),
-		Nonce:     1,
-		GasTipCap: big.NewInt(1),
-		GasFeeCap: big.NewInt(13_000_000_000),
-		Gas:       21_000,
-		To:        &to,
-		Value:     big.NewInt(1),
-	})
-
-	if err := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 0.5}).Validate(tx, testHead()); err != nil {
-		t.Fatalf("ratio 0.5: want accepted, got %v", err)
-	}
-	if err := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 1}).Validate(tx, testHead()); err == nil {
-		t.Fatal("ratio 1: want rejection, got nil")
-	}
-	if err := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 0}).Validate(tx, testHead()); err != nil {
-		t.Fatalf("ratio 0 (disabled): want accepted, got %v", err)
 	}
 }
 
@@ -333,7 +289,7 @@ func TestValidateAcceptsSetCodeTx(t *testing.T) {
 	})
 
 	head := testHead()
-	if err := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 1}).Validate(tx, head); err != nil {
+	if err := newTestValidator(t, TxValidatorOptions{}).Validate(tx, head); err != nil {
 		t.Fatalf("want accepted, got %v", err)
 	}
 	if head.Difficulty.Sign() == 0 {
@@ -345,7 +301,7 @@ func TestValidateAcceptsSetCodeTx(t *testing.T) {
 // the fields go-ethereum dereferences unconditionally. A nil difficulty used to
 // be the kind of input that panics on a peer's protocol goroutine.
 func TestValidateMissingHeadFields(t *testing.T) {
-	v := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 1})
+	v := newTestValidator(t, TxValidatorOptions{})
 	tx := signTx(t, testChainID, dynamicFeeTx(t))
 
 	head := testHead()
@@ -384,32 +340,5 @@ func TestRejectReasonUnknownErrors(t *testing.T) {
 	}
 	if got := RejectReason(types.ErrInvalidSig); got != "other" {
 		t.Fatalf("unmapped error: want other, got %q", got)
-	}
-}
-
-// TestNewTxValidatorRejectsUnrepresentableRatio covers a base fee ratio that
-// would round to zero in fixed point: it must be reported rather than silently
-// turning the check into a no-op.
-func TestNewTxValidatorRejectsUnrepresentableRatio(t *testing.T) {
-	if _, err := NewTxValidator(TxValidatorOptions{ChainID: testChainID, MinBaseFeeRatio: 0.0004}); err == nil {
-		t.Fatal("ratio below one scale step: want error, got nil")
-	}
-
-	// Just above half a step rounds up to 1/1000 and is honoured.
-	v, err := NewTxValidator(TxValidatorOptions{ChainID: testChainID, MinBaseFeeRatio: 0.0006})
-	if err != nil {
-		t.Fatalf("smallest representable ratio: %v", err)
-	}
-	if v.baseFeeRatio == nil || v.baseFeeRatio.Int64() != 1 {
-		t.Fatalf("want scaled ratio 1, got %v", v.baseFeeRatio)
-	}
-}
-
-// TestValidateBaseFeeRatioRounds pins the rounding: truncation would turn a
-// 0.0019 ratio into 0.001, applying half the floor the operator asked for.
-func TestValidateBaseFeeRatioRounds(t *testing.T) {
-	v := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 0.0019})
-	if got := v.baseFeeRatio.Int64(); got != 2 {
-		t.Fatalf("want scaled ratio 2, got %d", got)
 	}
 }
