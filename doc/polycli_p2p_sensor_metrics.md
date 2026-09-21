@@ -26,6 +26,24 @@ Number of failed broadcast sends
 Metric Type: Counter
 
 
+### sensor_broadcast_txs_rejected
+Number of transactions dropped from the broadcast path, by rejection reason
+
+Metric Type: CounterVec
+
+Variable Labels:
+- reason
+
+
+### sensor_broadcast_txs_validated
+Number of unique transactions checked before rebroadcast, by outcome
+
+Metric Type: CounterVec
+
+Variable Labels:
+- result
+
+
 ### sensor_head_block_age
 Time since head block was received (in seconds)
 
@@ -74,4 +92,10 @@ Metric Type: CounterVec
 Variable Labels:
 - method
 - proxied
+
+
+### sensor_tx_decode_errors
+Number of transactions received from peers that failed to decode
+
+Metric Type: Counter
 

@@ -94,10 +94,13 @@ func NewRPCRequestsCounter() *prometheus.CounterVec {
 
 // metrics contains Prometheus metrics for tracking messages and broadcasts.
 type metrics struct {
-	messages   *prometheus.CounterVec
-	queueDepth prometheus.Gauge
-	batchSize  prometheus.Histogram
-	sendErrors prometheus.Counter
+	messages       *prometheus.CounterVec
+	queueDepth     prometheus.Gauge
+	batchSize      prometheus.Histogram
+	sendErrors     prometheus.Counter
+	txsValidated   *prometheus.CounterVec
+	txsRejected    *prometheus.CounterVec
+	txDecodeErrors prometheus.Counter
 }
 
 // newMetrics creates and registers all message and broadcast-related Prometheus metrics.
@@ -123,6 +126,21 @@ func newMetrics() *metrics {
 			Namespace: "sensor",
 			Name:      "broadcast_send_errors",
 			Help:      "Number of failed broadcast sends",
+		}),
+		txsValidated: promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "sensor",
+			Name:      "broadcast_txs_validated",
+			Help:      "Number of unique transactions checked before rebroadcast, by outcome",
+		}, []string{"result"}),
+		txsRejected: promauto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "sensor",
+			Name:      "broadcast_txs_rejected",
+			Help:      "Number of transactions dropped from the broadcast path, by rejection reason",
+		}, []string{"reason"}),
+		txDecodeErrors: promauto.NewCounter(prometheus.CounterOpts{
+			Namespace: "sensor",
+			Name:      "tx_decode_errors",
+			Help:      "Number of transactions received from peers that failed to decode",
 		}),
 	}
 }

@@ -101,6 +101,48 @@ The validator set is fetched from `--heimdall-url` at startup (the sensor aborts
 if this initial fetch fails) and refreshed on the `--validator-set-refresh`
 interval.
 
+### Transaction Validation
+
+When transaction rebroadcasting is enabled (`--broadcast-txs` or
+`--broadcast-tx-hashes`), the sensor validates each transaction before
+forwarding it (`--validate-broadcast-txs`, enabled by default). Without this,
+any peer can push malformed or unmineable transactions through the sensor to
+every other peer it is connected to.
+
+Validation is the stateless half of a node's transaction admission rules, the
+same checks `go-ethereum` applies before a transaction enters its pool:
+
+- signature recovery against the `--network-id` chain ID, which rejects forged
+  signatures and transactions signed for another chain
+- transaction type (blob transactions are never forwarded, since the sensor has
+  no sidecar to forward with them)
+- encoded size, capped at 128KB
+- gas below the intrinsic cost, or above the head block's gas limit
+- init code size for contract creations
+- oversized fee fields, and a tip cap above the fee cap
+
+Nonce and balance are deliberately not checked. The sensor holds no chain state,
+and those checks would cost an RPC round trip per sender.
+
+Three fee floors are configurable on top of those rules:
+
+| Flag                            | Default | Effect                                                            |
+| ------------------------------- | ------- | ----------------------------------------------------------------- |
+| `--broadcast-min-basefee-ratio` | `1.0`   | Drops transactions whose fee cap is under this fraction of the head block's base fee; `1.0` means "cannot be included right now", `0` disables |
+| `--broadcast-min-gas-price`     | `0`     | Absolute floor in wei on the fee cap                               |
+| `--broadcast-min-tip`           | `0`     | Absolute floor in wei on the tip cap, equivalent to a node's `--txpool.pricelimit` |
+
+Validation gates rebroadcasting only. Rejected transactions are still cached,
+served on request, and written to the database, so the sensor keeps a complete
+record of the spam it declines to amplify. Transactions submitted to the
+sensor's own `eth_sendRawTransaction` endpoint bypass these checks.
+
+Two metrics track what is being dropped: `sensor_broadcast_txs_validated`
+(labeled `result="accepted"|"rejected"`) gives the drop ratio, and
+`sensor_broadcast_txs_rejected` breaks the rejections down by `reason`.
+Transactions that fail to decode at all never reach validation and are counted
+separately by `sensor_tx_decode_errors`.
+
 ## Examples
 
 ### Mainnet
@@ -156,77 +198,83 @@ polycli p2p sensor amoy-nodes.json \
 ## Flags
 
 ```bash
-      --api-port uint                     port API server will listen on (default 8080)
-      --blocks-cache-ttl duration         time to live for block cache entries (0 for no expiration) (default 10m0s)
-  -b, --bootnodes string                  comma separated nodes used for bootstrapping
-      --broadcast-block-hashes            broadcast block hashes to peers
-      --broadcast-blocks                  broadcast full blocks to peers
-      --broadcast-tx-hashes               broadcast transaction hashes to peers
-      --broadcast-txs                     broadcast full transactions to peers
-      --broadcast-workers int             number of concurrent broadcast workers (default 4)
-      --cache-only-validated-blocks       only cache and serve blocks signed by a known validator (unknown-signer blocks are still recorded to the database); has no effect without --validate-block-signer (default true)
-      --clickhouse-dsn string             ClickHouse DSN, e.g. clickhouse://user:pass@host:9000/sensor (used with --database=clickhouse)
-      --database string                   which database to persist data to, options are:
-                                            - datastore (GCP Datastore)
-                                            - clickhouse (ClickHouse, see --clickhouse-dsn)
-                                            - json (output to stdout)
-                                            - none (no persistence) (default "none")
-  -d, --database-id string                datastore database ID
-      --dial-ratio int                    ratio of inbound to dialed connections (dial ratio of 2 allows 1/2 of connections to be dialed, setting to 0 defaults to 3)
-      --discovery-dns string              DNS discovery ENR tree URL
-      --discovery-port int                UDP P2P discovery port (default 30303)
-      --fork-id bytesHex                  hex encoded fork ID (omit 0x) (default 22D523B2)
-      --genesis-hash string               genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
-      --heimdall-url string               heimdall REST URL for the validator set (used to validate blocks before rebroadcast) (default "https://heimdall-api.polygon.technology")
-  -h, --help                              help for sensor
-      --key string                        hex-encoded private key (cannot be set with --key-file)
-  -k, --key-file string                   private key file (cannot be set with --key)
-      --known-txs-bloom-hashes uint       number of hash functions for known txs bloom filter (default 7)
-      --known-txs-bloom-size uint         bloom filter size in bits for tracking known transactions per peer (default ~40KB per filter,
-                                          optimized for ~32K elements with ~1% false positive rate) (default 327680)
-      --max-blocks int                    maximum blocks to track across all peers (0 for no limit) (default 1024)
-  -D, --max-db-concurrency int            maximum number of concurrent database operations to perform (increasing this
-                                          will result in less chance of missing data but can significantly increase memory usage) (default 10000)
-      --max-known-blocks int              maximum block hashes to track per peer (0 for no limit) (default 1024)
-      --max-parents int                   maximum parent block hashes to track per peer (0 for no limit) (default 1024)
-  -m, --max-peers int                     maximum number of peers to connect to (default 2000)
-      --max-queued-txs int                maximum transaction announcements to queue per peer (default 4096)
-      --max-requests int                  maximum request IDs to track per peer (0 for no limit) (default 2048)
-      --max-tx-packet-size int            target size in bytes for transaction broadcast packets (default 102400)
-      --max-txs int                       maximum transactions to cache for serving to peers (0 for no limit) (default 32768)
-      --nat string                        NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
-  -n, --network-id uint                   filter discovered nodes by this network ID
-      --no-discovery                      disable P2P peer discovery
-      --parents-cache-ttl duration        time to live for parent hash cache entries (0 for no expiration) (default 5m0s)
-      --peer-snapshot-interval duration   how often to persist the connected-peer set (requires --write-peers); lower
-                                          values multiply write volume by up to --max-peers rows per tick (default 30s)
-      --port int                          TCP network listening port (default 30303)
-      --pprof                             run pprof server
-      --pprof-port uint                   port pprof runs on (default 6060)
-  -p, --project-id string                 GCP project ID
-      --prom                              run Prometheus server (default true)
-      --prom-port uint                    port Prometheus runs on (default 2112)
-      --proxy-rpc                         proxy unsupported RPC methods to the --rpc endpoint
-      --proxy-rpc-timeout duration        timeout for proxied RPC requests (default 30s)
-      --requests-cache-ttl duration       time to live for requests cache entries (0 for no expiration) (default 5m0s)
-      --rpc string                        RPC endpoint used to fetch latest block (default "https://polygon-rpc.com")
-      --rpc-port uint                     port for JSON-RPC server to receive transactions (default 8545)
-  -s, --sensor-id string                  sensor ID when writing block/tx events
-      --static-nodes string               static nodes file
-      --trusted-nodes string              trusted nodes file
-      --ttl duration                      time to live (default 336h0m0s)
-      --tx-batch-timeout duration         timeout for batching transactions before broadcast (default 500ms)
-      --tx-broadcast-queue-size int       capacity of transaction broadcast queue (default 100000)
-      --txs-cache-ttl duration            time to live for transaction cache entries (0 for no expiration) (default 10m0s)
-      --validate-block-signer             only rebroadcast blocks signed by a validator in the heimdall validator set (default true)
-      --validator-set-refresh duration    interval to refresh the validator set from heimdall (default 5m0s)
-      --write-block-events                write block events to database (default true)
-  -B, --write-blocks                      write blocks to database (default true)
-      --write-first-block-event           write one block event on first-seen only; ignored when --write-block-events is set
-      --write-first-tx-event              write one transaction event on first-seen only; ignored when --write-tx-events is set
-      --write-peers                       write peers to database (default true)
-      --write-tx-events                   write transaction events to database (this option can significantly increase CPU and memory usage) (default true)
-  -t, --write-txs                         write transactions to database (this option can significantly increase CPU and memory usage) (default true)
+      --api-port uint                       port API server will listen on (default 8080)
+      --blocks-cache-ttl duration           time to live for block cache entries (0 for no expiration) (default 10m0s)
+  -b, --bootnodes string                    comma separated nodes used for bootstrapping
+      --broadcast-block-hashes              broadcast block hashes to peers
+      --broadcast-blocks                    broadcast full blocks to peers
+      --broadcast-min-basefee-ratio float   fraction of the head block base fee a transaction fee cap must reach to be rebroadcast
+                                            (1 drops transactions that cannot be included at the current base fee, 0 to disable) (default 1)
+      --broadcast-min-gas-price uint        minimum gas fee cap in wei a transaction must offer to be rebroadcast (0 to disable)
+      --broadcast-min-tip uint              minimum gas tip cap in wei a transaction must offer to be rebroadcast (0 to disable)
+      --broadcast-tx-hashes                 broadcast transaction hashes to peers
+      --broadcast-txs                       broadcast full transactions to peers
+      --broadcast-workers int               number of concurrent broadcast workers (default 4)
+      --cache-only-validated-blocks         only cache and serve blocks signed by a known validator (unknown-signer blocks are still recorded to the database); has no effect without --validate-block-signer (default true)
+      --clickhouse-dsn string               ClickHouse DSN, e.g. clickhouse://user:pass@host:9000/sensor (used with --database=clickhouse)
+      --database string                     which database to persist data to, options are:
+                                              - datastore (GCP Datastore)
+                                              - clickhouse (ClickHouse, see --clickhouse-dsn)
+                                              - json (output to stdout)
+                                              - none (no persistence) (default "none")
+  -d, --database-id string                  datastore database ID
+      --dial-ratio int                      ratio of inbound to dialed connections (dial ratio of 2 allows 1/2 of connections to be dialed, setting to 0 defaults to 3)
+      --discovery-dns string                DNS discovery ENR tree URL
+      --discovery-port int                  UDP P2P discovery port (default 30303)
+      --fork-id bytesHex                    hex encoded fork ID (omit 0x) (default 22D523B2)
+      --genesis-hash string                 genesis block hash (default "0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
+      --heimdall-url string                 heimdall REST URL for the validator set (used to validate blocks before rebroadcast) (default "https://heimdall-api.polygon.technology")
+  -h, --help                                help for sensor
+      --key string                          hex-encoded private key (cannot be set with --key-file)
+  -k, --key-file string                     private key file (cannot be set with --key)
+      --known-txs-bloom-hashes uint         number of hash functions for known txs bloom filter (default 7)
+      --known-txs-bloom-size uint           bloom filter size in bits for tracking known transactions per peer (default ~40KB per filter,
+                                            optimized for ~32K elements with ~1% false positive rate) (default 327680)
+      --max-blocks int                      maximum blocks to track across all peers (0 for no limit) (default 1024)
+  -D, --max-db-concurrency int              maximum number of concurrent database operations to perform (increasing this
+                                            will result in less chance of missing data but can significantly increase memory usage) (default 10000)
+      --max-known-blocks int                maximum block hashes to track per peer (0 for no limit) (default 1024)
+      --max-parents int                     maximum parent block hashes to track per peer (0 for no limit) (default 1024)
+  -m, --max-peers int                       maximum number of peers to connect to (default 2000)
+      --max-queued-txs int                  maximum transaction announcements to queue per peer (default 4096)
+      --max-requests int                    maximum request IDs to track per peer (0 for no limit) (default 2048)
+      --max-tx-packet-size int              target size in bytes for transaction broadcast packets (default 102400)
+      --max-txs int                         maximum transactions to cache for serving to peers (0 for no limit) (default 32768)
+      --nat string                          NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>) (default "any")
+  -n, --network-id uint                     filter discovered nodes by this network ID
+      --no-discovery                        disable P2P peer discovery
+      --parents-cache-ttl duration          time to live for parent hash cache entries (0 for no expiration) (default 5m0s)
+      --peer-snapshot-interval duration     how often to persist the connected-peer set (requires --write-peers); lower
+                                            values multiply write volume by up to --max-peers rows per tick (default 30s)
+      --port int                            TCP network listening port (default 30303)
+      --pprof                               run pprof server
+      --pprof-port uint                     port pprof runs on (default 6060)
+  -p, --project-id string                   GCP project ID
+      --prom                                run Prometheus server (default true)
+      --prom-port uint                      port Prometheus runs on (default 2112)
+      --proxy-rpc                           proxy unsupported RPC methods to the --rpc endpoint
+      --proxy-rpc-timeout duration          timeout for proxied RPC requests (default 30s)
+      --requests-cache-ttl duration         time to live for requests cache entries (0 for no expiration) (default 5m0s)
+      --rpc string                          RPC endpoint used to fetch latest block (default "https://polygon-rpc.com")
+      --rpc-port uint                       port for JSON-RPC server to receive transactions (default 8545)
+  -s, --sensor-id string                    sensor ID when writing block/tx events
+      --static-nodes string                 static nodes file
+      --trusted-nodes string                trusted nodes file
+      --ttl duration                        time to live (default 336h0m0s)
+      --tx-batch-timeout duration           timeout for batching transactions before broadcast (default 500ms)
+      --tx-broadcast-queue-size int         capacity of transaction broadcast queue (default 100000)
+      --txs-cache-ttl duration              time to live for transaction cache entries (0 for no expiration) (default 10m0s)
+      --validate-block-signer               only rebroadcast blocks signed by a validator in the heimdall validator set (default true)
+      --validate-broadcast-txs              only rebroadcast transactions that pass stateless validation (signature, chain ID, size,
+                                            intrinsic gas, fees); rejected transactions are still cached and written to the database (default true)
+      --validator-set-refresh duration      interval to refresh the validator set from heimdall (default 5m0s)
+      --write-block-events                  write block events to database (default true)
+  -B, --write-blocks                        write blocks to database (default true)
+      --write-first-block-event             write one block event on first-seen only; ignored when --write-block-events is set
+      --write-first-tx-event                write one transaction event on first-seen only; ignored when --write-tx-events is set
+      --write-peers                         write peers to database (default true)
+      --write-tx-events                     write transaction events to database (this option can significantly increase CPU and memory usage) (default true)
+  -t, --write-txs                           write transactions to database (this option can significantly increase CPU and memory usage) (default true)
 ```
 
 The command also inherits flags from parent commands.

@@ -80,6 +80,48 @@ The validator set is fetched from `--heimdall-url` at startup (the sensor aborts
 if this initial fetch fails) and refreshed on the `--validator-set-refresh`
 interval.
 
+### Transaction Validation
+
+When transaction rebroadcasting is enabled (`--broadcast-txs` or
+`--broadcast-tx-hashes`), the sensor validates each transaction before
+forwarding it (`--validate-broadcast-txs`, enabled by default). Without this,
+any peer can push malformed or unmineable transactions through the sensor to
+every other peer it is connected to.
+
+Validation is the stateless half of a node's transaction admission rules, the
+same checks `go-ethereum` applies before a transaction enters its pool:
+
+- signature recovery against the `--network-id` chain ID, which rejects forged
+  signatures and transactions signed for another chain
+- transaction type (blob transactions are never forwarded, since the sensor has
+  no sidecar to forward with them)
+- encoded size, capped at 128KB
+- gas below the intrinsic cost, or above the head block's gas limit
+- init code size for contract creations
+- oversized fee fields, and a tip cap above the fee cap
+
+Nonce and balance are deliberately not checked. The sensor holds no chain state,
+and those checks would cost an RPC round trip per sender.
+
+Three fee floors are configurable on top of those rules:
+
+| Flag                            | Default | Effect                                                            |
+| ------------------------------- | ------- | ----------------------------------------------------------------- |
+| `--broadcast-min-basefee-ratio` | `1.0`   | Drops transactions whose fee cap is under this fraction of the head block's base fee; `1.0` means "cannot be included right now", `0` disables |
+| `--broadcast-min-gas-price`     | `0`     | Absolute floor in wei on the fee cap                               |
+| `--broadcast-min-tip`           | `0`     | Absolute floor in wei on the tip cap, equivalent to a node's `--txpool.pricelimit` |
+
+Validation gates rebroadcasting only. Rejected transactions are still cached,
+served on request, and written to the database, so the sensor keeps a complete
+record of the spam it declines to amplify. Transactions submitted to the
+sensor's own `eth_sendRawTransaction` endpoint bypass these checks.
+
+Two metrics track what is being dropped: `sensor_broadcast_txs_validated`
+(labeled `result="accepted"|"rejected"`) gives the drop ratio, and
+`sensor_broadcast_txs_rejected` breaks the rejections down by `reason`.
+Transactions that fail to decode at all never reach validation and are counted
+separately by `sensor_tx_decode_errors`.
+
 ## Examples
 
 ### Mainnet

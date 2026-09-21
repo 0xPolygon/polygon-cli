@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"math/big"
 	"os/signal"
 	"runtime"
 	"syscall"
@@ -64,6 +65,10 @@ type (
 		MaxTxPacketSize                  int
 		MaxQueuedTxs                     int
 		ValidateBlockSigner              bool
+		ValidateBroadcastTxs             bool
+		BroadcastMinGasPrice             uint64
+		BroadcastMinTip                  uint64
+		BroadcastMinBaseFeeRatio         float64
 		CacheOnlyValidatedBlocks         bool
 		HeimdallURL                      string
 		ValidatorSetRefresh              time.Duration
@@ -201,6 +206,10 @@ var SensorCmd = &cobra.Command{
 			return errors.New("--peer-snapshot-interval must be greater than zero")
 		}
 
+		if inputSensorParams.BroadcastMinBaseFeeRatio < 0 {
+			return errors.New("--broadcast-min-basefee-ratio cannot be negative")
+		}
+
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -247,6 +256,23 @@ var SensorCmd = &cobra.Command{
 			}
 		}
 
+		// When transaction rebroadcasting is enabled, validate transactions
+		// before forwarding them so peers sending junk cannot use the sensor to
+		// amplify it. Everything received is still cached and persisted.
+		var txValidator *p2p.TxValidator
+		if inputSensorParams.ValidateBroadcastTxs &&
+			(inputSensorParams.ShouldBroadcastTx || inputSensorParams.ShouldBroadcastTxHashes) {
+			txValidator, err = p2p.NewTxValidator(p2p.TxValidatorOptions{
+				ChainID:         inputSensorParams.NetworkID,
+				MinGasPrice:     new(big.Int).SetUint64(inputSensorParams.BroadcastMinGasPrice),
+				MinTip:          new(big.Int).SetUint64(inputSensorParams.BroadcastMinTip),
+				MinBaseFeeRatio: inputSensorParams.BroadcastMinBaseFeeRatio,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create transaction validator: %w", err)
+			}
+		}
+
 		// Create peer connection manager for broadcasting transactions
 		// and managing the global blocks cache
 		conns := p2p.NewConns(p2p.ConnsOptions{
@@ -266,6 +292,7 @@ var SensorCmd = &cobra.Command{
 			MaxQueuedTxs:               inputSensorParams.MaxQueuedTxs,
 			ValidatorSet:               validators,
 			CacheOnlyValidatedBlocks:   inputSensorParams.CacheOnlyValidatedBlocks,
+			TxValidator:                txValidator,
 		})
 
 		opts := p2p.EthProtocolOptions{
@@ -578,6 +605,16 @@ values multiply write volume by up to --max-peers rows per tick`)
 	f.BoolVar(&inputSensorParams.CacheOnlyValidatedBlocks, "cache-only-validated-blocks", true, "only cache and serve blocks signed by a known validator (unknown-signer blocks are still recorded to the database); has no effect without --validate-block-signer")
 	f.StringVar(&inputSensorParams.HeimdallURL, "heimdall-url", "https://heimdall-api.polygon.technology", "heimdall REST URL for the validator set (used to validate blocks before rebroadcast)")
 	f.DurationVar(&inputSensorParams.ValidatorSetRefresh, "validator-set-refresh", 5*time.Minute, "interval to refresh the validator set from heimdall")
+	f.BoolVar(&inputSensorParams.ValidateBroadcastTxs, "validate-broadcast-txs", true,
+		`only rebroadcast transactions that pass stateless validation (signature, chain ID, size,
+intrinsic gas, fees); rejected transactions are still cached and written to the database`)
+	f.Uint64Var(&inputSensorParams.BroadcastMinGasPrice, "broadcast-min-gas-price", 0,
+		"minimum gas fee cap in wei a transaction must offer to be rebroadcast (0 to disable)")
+	f.Uint64Var(&inputSensorParams.BroadcastMinTip, "broadcast-min-tip", 0,
+		"minimum gas tip cap in wei a transaction must offer to be rebroadcast (0 to disable)")
+	f.Float64Var(&inputSensorParams.BroadcastMinBaseFeeRatio, "broadcast-min-basefee-ratio", 1.0,
+		`fraction of the head block base fee a transaction fee cap must reach to be rebroadcast
+(1 drops transactions that cannot be included at the current base fee, 0 to disable)`)
 	f.BoolVar(&inputSensorParams.ShouldRunPprof, "pprof", false, "run pprof server")
 	f.UintVar(&inputSensorParams.PprofPort, "pprof-port", 6060, "port pprof runs on")
 	f.BoolVar(&inputSensorParams.ShouldRunPrometheus, "prom", true, "run Prometheus server")

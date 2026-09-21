@@ -854,6 +854,7 @@ func (c *conn) decodeTx(raw []byte) *types.Transaction {
 		if len(bytes) > 0 {
 			txType = int(bytes[0])
 		}
+		c.countTxDecodeError()
 		c.logger.Warn().
 			Err(err).
 			Int("type", txType).
@@ -878,6 +879,7 @@ func (c *conn) decodeTx(raw []byte) *types.Transaction {
 	if len(raw) > 0 {
 		prefix = int(raw[0])
 	}
+	c.countTxDecodeError()
 	c.logger.Warn().
 		Err(err).
 		Int("prefix", prefix).
@@ -886,6 +888,17 @@ func (c *conn) decodeTx(raw []byte) *types.Transaction {
 		Msg("Failed to decode transaction")
 
 	return nil
+}
+
+// countTxDecodeError records a transaction that arrived from a peer but could
+// not be decoded. These never reach the cache, the database or the broadcast
+// path, so this counter is the only place they are visible.
+func (c *conn) countTxDecodeError() {
+	if c.conns == nil {
+		return
+	}
+
+	c.conns.metrics.txDecodeErrors.Inc()
 }
 
 // decodeTxsStrict decodes every transaction or fails.
@@ -947,16 +960,21 @@ func (c *conn) processTransactions(ctx context.Context, txs []*types.Transaction
 	}
 
 	// Add to cache BEFORE writing (prevents duplicate writes from other peers)
-	hashes := c.conns.AddTxs(newTxs)
+	c.conns.AddTxs(newTxs)
 
 	// Only write NEW transactions (cache miss = needs DB write)
 	if len(newTxs) > 0 {
 		c.db.WriteTransactions(ctx, c.node, newTxs, tfs)
 	}
 
+	// Everything the peer sent is cached and recorded above; only the subset a
+	// real node would accept gets forwarded, so a peer feeding us junk cannot
+	// use the sensor to amplify it.
+	broadcastTxs, broadcastHashes := c.conns.FilterBroadcastableTxs(newTxs)
+
 	// Broadcast transactions or hashes to other peers asynchronously
-	go c.conns.BroadcastTxs(types.Transactions(newTxs))
-	go c.conns.BroadcastTxHashes(hashes)
+	go c.conns.BroadcastTxs(types.Transactions(broadcastTxs))
+	go c.conns.BroadcastTxHashes(broadcastHashes)
 }
 
 // encodeBlockBody converts a block to an eth.BlockBody with RLP-encoded fields.

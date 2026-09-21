@@ -51,6 +51,10 @@ type ConnsOptions struct {
 	// in the serving cache. Unknown-signer blocks are still persisted to the
 	// database but their header/body are not cached or served to peers.
 	CacheOnlyValidatedBlocks bool
+
+	// TxValidator, when non-nil, gates transaction rebroadcasting: only
+	// transactions that pass stateless validation are forwarded to peers.
+	TxValidator *TxValidator
 }
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
@@ -106,6 +110,10 @@ type Conns struct {
 	// cacheOnlyValidated, when true, keeps only validator-signed blocks in the
 	// serving cache (unknown-signer blocks are recorded to the database only).
 	cacheOnlyValidated bool
+
+	// txValidator, when non-nil, gates transaction rebroadcasting by stateless
+	// validity.
+	txValidator *TxValidator
 
 	// metrics tracks broadcast-related Prometheus metrics
 	metrics *metrics
@@ -164,6 +172,7 @@ func NewConns(opts ConnsOptions) *Conns {
 		maxQueuedTxs:               opts.MaxQueuedTxs,
 		validators:                 opts.ValidatorSet,
 		cacheOnlyValidated:         opts.CacheOnlyValidatedBlocks,
+		txValidator:                opts.TxValidator,
 		metrics:                    newMetrics(),
 	}
 
@@ -201,6 +210,62 @@ func (c *Conns) snapshotPeers() []*conn {
 		peers = append(peers, cn)
 	}
 	return peers
+}
+
+// FilterBroadcastableTxs returns the transactions the sensor should forward to
+// its peers, along with their hashes, and records the outcome in metrics.
+//
+// Validation gates amplification only. Callers cache and persist everything they
+// receive before calling this, so the sensor keeps observing invalid traffic --
+// it just stops passing it on. Returns nil when rebroadcasting is disabled or no
+// validator is configured with rebroadcasting on.
+func (c *Conns) FilterBroadcastableTxs(txs []*types.Transaction) ([]*types.Transaction, []common.Hash) {
+	if (!c.shouldBroadcastTx && !c.shouldBroadcastTxHashes) || len(txs) == 0 {
+		return nil, nil
+	}
+
+	// tx.Hash() is memoized by go-ethereum, so recomputing hashes here costs
+	// nothing beyond the map lookups the callers already pay for.
+	hashes := make([]common.Hash, 0, len(txs))
+	allHashes := func() ([]*types.Transaction, []common.Hash) {
+		for _, tx := range txs {
+			hashes = append(hashes, tx.Hash())
+		}
+		return txs, hashes
+	}
+
+	if c.txValidator == nil {
+		return allHashes()
+	}
+
+	// The head is set at construction from the RPC endpoint and only moves
+	// forward, so a nil block here is not reachable in the sensor; fall back to
+	// forwarding rather than silently halting broadcast if it ever is.
+	head := c.HeadBlock().Block
+	if head == nil {
+		log.Warn().Msg("No head block, skipping transaction validation")
+		return allHashes()
+	}
+	header := head.Header()
+
+	valid := make([]*types.Transaction, 0, len(txs))
+	for _, tx := range txs {
+		if err := c.txValidator.Validate(tx, header); err != nil {
+			c.metrics.txsValidated.WithLabelValues("rejected").Inc()
+			c.metrics.txsRejected.WithLabelValues(RejectReason(err)).Inc()
+			log.Debug().
+				Err(err).
+				Str("hash", tx.Hash().Hex()).
+				Msg("Dropped transaction from broadcast")
+			continue
+		}
+
+		c.metrics.txsValidated.WithLabelValues("accepted").Inc()
+		valid = append(valid, tx)
+		hashes = append(hashes, tx.Hash())
+	}
+
+	return valid, hashes
 }
 
 // BroadcastTx broadcasts a single transaction to all connected peers.
