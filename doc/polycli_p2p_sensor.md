@@ -101,6 +101,81 @@ The validator set is fetched from `--heimdall-url` at startup (the sensor aborts
 if this initial fetch fails) and refreshed on the `--validator-set-refresh`
 interval.
 
+### Transaction Validation
+
+When transaction rebroadcasting is enabled (`--broadcast-txs` or
+`--broadcast-tx-hashes`), the sensor validates each transaction before
+forwarding it (`--validate-broadcast-txs`, enabled by default). Without this,
+any peer can push malformed or unmineable transactions through the sensor to
+every other peer it is connected to.
+
+Validation is the stateless half of a node's transaction admission rules, the
+same checks `go-ethereum` applies before a transaction enters its pool:
+
+- signature recovery against the `--network-id` chain ID, which rejects forged
+  signatures and transactions signed for another chain
+- transaction type (blob transactions are never forwarded, since the sensor has
+  no sidecar to forward with them)
+- encoded size, capped at 128KB
+- gas below the intrinsic cost, or above the head block's gas limit
+- init code size for contract creations
+- oversized fee fields, and a tip cap above the fee cap
+
+Nonce and balance are deliberately not checked. The sensor holds no chain state,
+and those checks would cost an RPC round trip per sender.
+
+The head block gates the gas limit check and supplies the fork rules, and the
+head is peer-supplied, so `UpdateHeadBlock` only accepts a block whose signer is
+in the validator set when one is configured (`--validate-block-signer`). Without
+that, a peer could declare a head with a gas limit of zero and have every honest
+transaction rejected. On a chain with no validator set the head is unguarded, as
+it was before.
+
+Fork rules are assumed current: every fork through Prague is treated as active,
+since neither `--network-id` nor `--fork-id` yields a fork schedule. Later forks
+mostly add transaction types, but two of them tighten — Shanghai caps init code
+size and Prague adds the calldata floor gas cost — so on a chain that has not
+adopted those, large deployments and calldata-heavy transactions are dropped as
+`init_code_too_large` or `intrinsic_gas`. Turn validation off on such a chain.
+
+The signer is bound to `--network-id`. On the networks this targets that is also
+the chain ID; on a chain where the two differ, every transaction fails sender
+recovery and nothing is forwarded. The sensor logs the chain ID it validates
+against at startup.
+
+Two fee floors are configurable on top of those rules, mirroring the two bor
+exposes:
+
+| Flag                        | bor equivalent         | Effect                              |
+| --------------------------- | ---------------------- | ----------------------------------- |
+| `--broadcast-min-tip`       | `--txpool.pricelimit`  | Floor in wei on the tip cap         |
+| `--broadcast-min-gas-price` | `--miner.gasprice`     | Floor in wei on the fee cap         |
+
+Both default to `0`. On Polygon both of bor's are pinned at 25 gwei by PIP-35,
+and a tip cap can never exceed its fee cap, so setting the tip floor alone is
+usually enough.
+
+There is deliberately **no base fee filter**. Bor applies none when it gossips a
+transaction it has just accepted; the base fee only gates its periodic
+re-broadcast of stuck pending transactions, which is not what the sensor is
+doing when it forwards what it just received. A fractional base fee floor was
+implemented here and removed: on ~100k mainnet transactions it accounted for 97%
+of all rejections while every other check accounted for none, so it was doing
+nearly all of the filtering while dropping transactions bor itself would have
+relayed. The sensor's head also lags the chain by a median of 2 blocks and up to
+7, so the comparison ran against a stale base fee.
+
+Validation gates rebroadcasting only. Rejected transactions are still cached,
+served on request, and written to the database, so the sensor keeps a complete
+record of the spam it declines to amplify. Transactions submitted to the
+sensor's own `eth_sendRawTransaction` endpoint bypass these checks.
+
+Two metrics track what is being dropped: `sensor_broadcast_txs_validated`
+(labeled `result="accepted"|"rejected"`) gives the drop ratio, and
+`sensor_broadcast_txs_rejected` breaks the rejections down by `reason`.
+Transactions that fail to decode at all never reach validation and are counted
+separately by `sensor_tx_decode_errors`.
+
 ## Examples
 
 ### Mainnet
@@ -161,6 +236,8 @@ polycli p2p sensor amoy-nodes.json \
   -b, --bootnodes string                  comma separated nodes used for bootstrapping
       --broadcast-block-hashes            broadcast block hashes to peers
       --broadcast-blocks                  broadcast full blocks to peers
+      --broadcast-min-gas-price uint      minimum gas fee cap in wei a transaction must offer to be rebroadcast, matching bor's --miner.gasprice (0 to disable)
+      --broadcast-min-tip uint            minimum gas tip cap in wei a transaction must offer to be rebroadcast, matching bor's --txpool.pricelimit (0 to disable)
       --broadcast-tx-hashes               broadcast transaction hashes to peers
       --broadcast-txs                     broadcast full transactions to peers
       --broadcast-workers int             number of concurrent broadcast workers (default 4)
@@ -219,6 +296,8 @@ polycli p2p sensor amoy-nodes.json \
       --tx-broadcast-queue-size int       capacity of transaction broadcast queue (default 100000)
       --txs-cache-ttl duration            time to live for transaction cache entries (0 for no expiration) (default 10m0s)
       --validate-block-signer             only rebroadcast blocks signed by a validator in the heimdall validator set (default true)
+      --validate-broadcast-txs            only rebroadcast transactions that pass stateless validation (signature, chain ID, size,
+                                          intrinsic gas, fees); rejected transactions are still cached and written to the database (default true)
       --validator-set-refresh duration    interval to refresh the validator set from heimdall (default 5m0s)
       --write-block-events                write block events to database (default true)
   -B, --write-blocks                      write blocks to database (default true)
