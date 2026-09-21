@@ -171,7 +171,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/kms v1.33.0
+	cloud.google.com/go/kms v1.34.0
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/ClickHouse/clickhouse-go/v2 v2.48.0
 	github.com/btcsuite/btcd/btcutil v1.2.0
