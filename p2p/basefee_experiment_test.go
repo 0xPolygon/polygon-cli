@@ -102,7 +102,7 @@ func rpcCall(url, method string, params []any, out any) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var envelope struct {
 		Result json.RawMessage `json:"result"`
