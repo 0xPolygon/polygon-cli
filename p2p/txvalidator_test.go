@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/holiman/uint256"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -297,6 +299,45 @@ func TestValidateBaseFeeRatio(t *testing.T) {
 	}
 	if err := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 0}).Validate(tx, testHead()); err != nil {
 		t.Fatalf("ratio 0 (disabled): want accepted, got %v", err)
+	}
+}
+
+// TestValidateAcceptsSetCodeTx is a regression test for fork rules on Bor.
+// go-ethereum only activates timestamp-scheduled forks when the head looks
+// post-merge, and Bor headers keep a non-zero difficulty forever, so an
+// unadjusted header pinned validation to London and dropped every EIP-7702
+// transaction on Polygon mainnet as an unsupported type.
+func TestValidateAcceptsSetCodeTx(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	auth, err := types.SignSetCode(key, types.SetCodeAuthorization{
+		ChainID: *uint256.NewInt(testChainID),
+		Address: common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		Nonce:   1,
+	})
+	if err != nil {
+		t.Fatalf("sign authorization: %v", err)
+	}
+
+	tx := signTx(t, testChainID, &types.SetCodeTx{
+		ChainID:   uint256.NewInt(testChainID),
+		Nonce:     1,
+		GasTipCap: uint256.NewInt(30_000_000_000),
+		GasFeeCap: uint256.NewInt(60_000_000_000),
+		Gas:       100_000,
+		To:        common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		AuthList:  []types.SetCodeAuthorization{auth},
+	})
+
+	head := testHead()
+	if err := newTestValidator(t, TxValidatorOptions{MinBaseFeeRatio: 1}).Validate(tx, head); err != nil {
+		t.Fatalf("want accepted, got %v", err)
+	}
+	if head.Difficulty.Sign() == 0 {
+		t.Fatal("validator mutated the caller's header difficulty")
 	}
 }
 

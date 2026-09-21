@@ -133,15 +133,17 @@ func (v *TxValidator) Validate(tx *types.Transaction, head *types.Header) error 
 		return errors.New("nil head header")
 	}
 
-	// ValidateTransaction reads head.Difficulty to decide whether the chain is
-	// post-merge. Headers reconstructed from RPC or RLP can leave it nil, and a
-	// nil dereference there would kill the peer's protocol goroutine, so fill in
-	// a copy rather than trusting the caller.
-	if head.Difficulty == nil {
-		clone := *head
-		clone.Difficulty = new(big.Int)
-		head = &clone
-	}
+	// go-ethereum gates every timestamp-scheduled fork -- Shanghai, Cancun,
+	// Prague -- on the chain being post-merge, which ValidateTransaction infers
+	// from a zero header difficulty. Bor keeps a non-zero difficulty forever, so
+	// handing it the header as-is pins validation to London and rejects every
+	// EIP-7702 transaction as an unsupported type. Validate against a copy with
+	// the difficulty zeroed, which also covers a nil difficulty: geth
+	// dereferences it unconditionally, and that panic would land on the peer's
+	// protocol goroutine.
+	postMerge := *head
+	postMerge.Difficulty = new(big.Int)
+	head = &postMerge
 
 	if err := txpool.ValidateTransaction(tx, head, v.signer, v.opts); err != nil {
 		return err
@@ -203,7 +205,8 @@ func RejectReason(err error) string {
 }
 
 // broadcastChainConfig builds a permissive chain config for the given chain ID:
-// every fork through Prague is active from genesis.
+// every fork through Prague is active from genesis. Validate zeroes the header
+// difficulty so the timestamp-scheduled forks in here actually take effect.
 //
 // The sensor does not know its chain's fork schedule (it only knows the network
 // ID and a fork ID hash), and this config is used solely to decide what to
