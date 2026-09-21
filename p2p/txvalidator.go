@@ -56,7 +56,16 @@ type TxValidatorOptions struct {
 // rejections and every other check produced none, so it was doing nearly all of
 // the "spam" filtering while dropping transactions bor itself would have
 // relayed. The sensor's head also lags the chain by a median of 2 blocks and up
-// to 7, so the comparison was made against a stale base fee. What it does catch is
+// to 7, so the comparison was made against a stale base fee.
+//
+// Copying bor's own comparison is not available either: its CalcBaseFee is not
+// go-ethereum's. It takes the gas target from a Dandeli percentage that varies
+// with the base fee, the change denominator from a Bhilai-era schedule, and
+// caps the per-block change at 5% post-Lisovo -- all three read config.Bor,
+// which a sensor has no source for. Measured against live chains, go-ethereum's
+// formula reproduced the next base fee in 0 of 30 blocks on mainnet (up to 9.2%
+// off, in the wrong direction) and 0 of 30 on amoy. See
+// TestCalcBaseFeeAgainstChain. What it does catch is
 // everything a peer can make up for free -- forged signatures, transactions signed
 // for another chain, oversized payloads, gas below the intrinsic cost, fee caps
 // that can never be mined -- which is the bulk of what a spamming peer sends.
