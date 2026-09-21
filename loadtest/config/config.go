@@ -54,24 +54,28 @@ type Config struct {
 	Seed        int64
 
 	// Transaction options
-	PrivateKey         string
-	ToAddress          string
-	EthAmountInWei     uint64
-	RandomRecipients   bool
-	LegacyTxMode       bool
-	FireAndForget      bool
-	CheckForPreconf    bool
-	PreconfStatsFile   string
-	WaitForReceipt     bool
-	ReceiptRetryMax    uint
-	ReceiptRetryDelay  uint // initial delay in milliseconds
-	OutputRawTxOnly    bool
-	PrivateTxs         bool
-	StartNonce         uint64
-	StartNonceSet      bool `json:"-"`
-	GasPriceMultiplier float64
-	DuplicateNonceRate float64
-	ReverseNonceOrder  bool
+	PrivateKey          string
+	ToAddress           string
+	EthAmountInWei      uint64
+	RandomRecipients    bool
+	LegacyTxMode        bool
+	FireAndForget       bool
+	CheckForPreconf     bool
+	PreconfStatsFile    string
+	WaitForReceipt      bool
+	ReceiptRetryMax     uint
+	ReceiptRetryDelay   uint // initial delay in milliseconds
+	ReceiptPollInterval time.Duration
+	OutputRawTxOnly     bool
+	PrivateTxs          bool
+	SyncTxs             bool
+	SyncTxTimeout       time.Duration
+	SyncTxTimeoutInt    bool
+	StartNonce          uint64
+	StartNonceSet       bool `json:"-"`
+	GasPriceMultiplier  float64
+	DuplicateNonceRate  float64
+	ReverseNonceOrder   bool
 
 	// Gas options
 	ForceGasLimit         uint64
@@ -194,8 +198,17 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("the backoff factor needs to be non-zero positive. Given: %f", c.AdaptiveBackoffFactor)
 	}
 
-	if c.WaitForReceipt && c.ReceiptRetryMax <= 1 {
+	// Retry max only governs the exponential backoff schedule; fixed-interval
+	// polling is bounded by the receipt timeout instead.
+	if c.WaitForReceipt && c.ReceiptPollInterval == 0 && c.ReceiptRetryMax <= 1 {
 		return errors.New("when waiting for a receipt, use a max retry greater than 1")
+	}
+
+	if c.ReceiptPollInterval < 0 {
+		return fmt.Errorf("--receipt-poll-interval must not be negative, got %s", c.ReceiptPollInterval)
+	}
+	if c.ReceiptPollInterval > 0 && !c.WaitForReceipt {
+		return errors.New("--receipt-poll-interval requires --wait-for-receipt")
 	}
 
 	if c.EthCallOnly {
@@ -227,6 +240,28 @@ func (c *Config) Validate() error {
 		if err := c.validateModesSupportRawSend("--private-txs"); err != nil {
 			return err
 		}
+	}
+
+	if c.SyncTxs {
+		if c.PrivateTxs {
+			return errors.New("--sync-txs and --private-txs are mutually exclusive (each sends via a different RPC method)")
+		}
+		if c.EthCallOnly {
+			return errors.New("--sync-txs doesn't make sense with --eth-call-only, which never sends a transaction")
+		}
+		if c.OutputRawTxOnly {
+			return errors.New("--sync-txs doesn't make sense with --output-raw-tx-only, which never sends a transaction")
+		}
+		if err := c.validateModesSupportRawSend("--sync-txs"); err != nil {
+			return err
+		}
+	}
+
+	if c.SyncTxTimeout < 0 {
+		return fmt.Errorf("--sync-tx-timeout must not be negative, got %s", c.SyncTxTimeout)
+	}
+	if c.SyncTxTimeout > 0 && c.SyncTxTimeout < time.Millisecond {
+		return fmt.Errorf("--sync-tx-timeout is sent in whole milliseconds, so %s rounds to zero; use 0 to let the node apply its default", c.SyncTxTimeout)
 	}
 
 	if c.SendRPCURL != "" {

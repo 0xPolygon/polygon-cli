@@ -96,13 +96,17 @@ var TailCmd = &cobra.Command{
 				}
 				log.Warn().Err(err).Msg("Unable to fetch latest block number; retrying")
 			} else if nextBlock <= latestBlock {
-				if err := writeBlockRange(ctx, ec, nextBlock, latestBlock); err != nil {
+				// Advance the cursor past whatever was printed, even on
+				// error, so a retry never re-prints blocks.
+				lastPrinted, printed, err := writeBlockRange(ctx, ec, nextBlock, latestBlock)
+				if printed {
+					nextBlock = lastPrinted + 1
+				}
+				if err != nil {
 					if !inputTail.Follow {
 						return err
 					}
 					log.Warn().Err(err).Msg("Unable to fetch block range; retrying")
-				} else {
-					nextBlock = latestBlock + 1
 				}
 			}
 
@@ -140,7 +144,11 @@ func getLatestBlockNumber(ctx context.Context, ec *ethrpc.Client) (uint64, error
 	return blockNumber, nil
 }
 
-func writeBlockRange(ctx context.Context, ec *ethrpc.Client, start, end uint64) error {
+// writeBlockRange fetches and prints blocks in [start, end]. It returns the
+// number of the last printed block and whether any block was printed so the
+// caller can advance its cursor past printed blocks even when an error is
+// returned, ensuring a retry never re-prints a block.
+func writeBlockRange(ctx context.Context, ec *ethrpc.Client, start, end uint64) (uint64, bool, error) {
 	blocks, err := util.GetBlockRangeInPages(
 		ctx,
 		start,
@@ -150,44 +158,69 @@ func writeBlockRange(ctx context.Context, ec *ethrpc.Client, start, end uint64) 
 		false,
 	)
 	if err != nil {
-		return err
+		return 0, false, err
+	}
+
+	type numberedBlock struct {
+		number uint64
+		raw    *json.RawMessage
+	}
+
+	// Batch responses are positional, so a null response at index i means the
+	// serving node does not have block start+i yet (e.g. a lagging node
+	// behind a load balancer). Printing stops before the first missing block
+	// so it can be retried instead of being skipped.
+	firstMissing := end + 1
+	parsed := make([]numberedBlock, 0, len(blocks))
+	for i, block := range blocks {
+		if block == nil || string(*block) == "null" {
+			if blockNum := start + uint64(i); blockNum < firstMissing {
+				firstMissing = blockNum
+			}
+			continue
+		}
+		blockNum, err := extractBlockNumber(block)
+		if err != nil {
+			return 0, false, fmt.Errorf("unable to parse block number: %w", err)
+		}
+		parsed = append(parsed, numberedBlock{number: blockNum, raw: block})
 	}
 
 	// Sort blocks by number to ensure correct order
-	sort.Slice(blocks, func(i, j int) bool {
-		numI, errI := extractBlockNumber(blocks[i])
-		numJ, errJ := extractBlockNumber(blocks[j])
-		if errI != nil || errJ != nil {
-			// If we can't parse, maintain original order
-			return i < j
-		}
-		return numI < numJ
+	sort.Slice(parsed, func(i, j int) bool {
+		return parsed[i].number < parsed[j].number
 	})
 
 	// Validate no gaps and output blocks
+	var lastPrinted uint64
+	printedAny := false
 	expectedBlock := start
-	for _, block := range blocks {
-		blockNum, err := extractBlockNumber(block)
-		if err != nil {
-			return fmt.Errorf("unable to parse block number: %w", err)
+	for _, block := range parsed {
+		if block.number >= firstMissing {
+			break
 		}
 
 		// Check for gaps. Continue anyway - the RPC may not have all
-		// blocks; expectedBlock is re-derived from blockNum below.
-		if blockNum > expectedBlock {
+		// blocks; expectedBlock is re-derived from block.number below.
+		if block.number > expectedBlock {
 			log.Warn().
 				Uint64("expected", expectedBlock).
-				Uint64("received", blockNum).
+				Uint64("received", block.number).
 				Msg("Gap detected in block sequence")
 		}
 
-		if _, err := fmt.Fprintln(os.Stdout, string(*block)); err != nil {
-			return err
+		if _, err := fmt.Fprintln(os.Stdout, string(*block.raw)); err != nil {
+			return lastPrinted, printedAny, err
 		}
-		expectedBlock = blockNum + 1
+		lastPrinted = block.number
+		printedAny = true
+		expectedBlock = block.number + 1
 	}
 
-	return nil
+	if firstMissing <= end {
+		return lastPrinted, printedAny, fmt.Errorf("block %d not yet available on serving node", firstMissing)
+	}
+	return lastPrinted, printedAny, nil
 }
 
 func extractBlockNumber(block *json.RawMessage) (uint64, error) {
