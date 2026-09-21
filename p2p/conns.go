@@ -51,6 +51,10 @@ type ConnsOptions struct {
 	// in the serving cache. Unknown-signer blocks are still persisted to the
 	// database but their header/body are not cached or served to peers.
 	CacheOnlyValidatedBlocks bool
+
+	// TxValidator, when non-nil, gates transaction rebroadcasting: only
+	// transactions that pass stateless validation are forwarded to peers.
+	TxValidator *TxValidator
 }
 
 // Conns manages a collection of active peer connections for transaction broadcasting.
@@ -106,6 +110,10 @@ type Conns struct {
 	// cacheOnlyValidated, when true, keeps only validator-signed blocks in the
 	// serving cache (unknown-signer blocks are recorded to the database only).
 	cacheOnlyValidated bool
+
+	// txValidator, when non-nil, gates transaction rebroadcasting by stateless
+	// validity.
+	txValidator *TxValidator
 
 	// metrics tracks broadcast-related Prometheus metrics
 	metrics *metrics
@@ -164,6 +172,7 @@ func NewConns(opts ConnsOptions) *Conns {
 		maxQueuedTxs:               opts.MaxQueuedTxs,
 		validators:                 opts.ValidatorSet,
 		cacheOnlyValidated:         opts.CacheOnlyValidatedBlocks,
+		txValidator:                opts.TxValidator,
 		metrics:                    newMetrics(),
 	}
 
@@ -201,6 +210,62 @@ func (c *Conns) snapshotPeers() []*conn {
 		peers = append(peers, cn)
 	}
 	return peers
+}
+
+// FilterBroadcastableTxs returns the transactions the sensor should forward to
+// its peers, along with their hashes, and records the outcome in metrics.
+//
+// Validation gates amplification only. Callers cache and persist everything they
+// receive before calling this, so the sensor keeps observing invalid traffic --
+// it just stops passing it on. Returns nil when rebroadcasting is disabled or no
+// validator is configured with rebroadcasting on.
+func (c *Conns) FilterBroadcastableTxs(txs []*types.Transaction) ([]*types.Transaction, []common.Hash) {
+	if (!c.shouldBroadcastTx && !c.shouldBroadcastTxHashes) || len(txs) == 0 {
+		return nil, nil
+	}
+
+	// tx.Hash() is memoized by go-ethereum, so recomputing hashes here costs
+	// nothing beyond the map lookups the callers already pay for.
+	hashes := make([]common.Hash, 0, len(txs))
+	allHashes := func() ([]*types.Transaction, []common.Hash) {
+		for _, tx := range txs {
+			hashes = append(hashes, tx.Hash())
+		}
+		return txs, hashes
+	}
+
+	if c.txValidator == nil {
+		return allHashes()
+	}
+
+	// The head is set at construction from the RPC endpoint and only moves
+	// forward, so a nil block here is not reachable in the sensor; fall back to
+	// forwarding rather than silently halting broadcast if it ever is.
+	head := c.HeadBlock().Block
+	if head == nil {
+		log.Warn().Msg("No head block, skipping transaction validation")
+		return allHashes()
+	}
+	header := head.Header()
+
+	valid := make([]*types.Transaction, 0, len(txs))
+	for _, tx := range txs {
+		if err := c.txValidator.Validate(tx, header); err != nil {
+			c.metrics.txsValidated.WithLabelValues("rejected").Inc()
+			c.metrics.txsRejected.WithLabelValues(RejectReason(err)).Inc()
+			log.Debug().
+				Err(err).
+				Str("hash", tx.Hash().Hex()).
+				Msg("Dropped transaction from broadcast")
+			continue
+		}
+
+		c.metrics.txsValidated.WithLabelValues("accepted").Inc()
+		valid = append(valid, tx)
+		hashes = append(hashes, tx.Hash())
+	}
+
+	return valid, hashes
 }
 
 // BroadcastTx broadcasts a single transaction to all connected peers.
@@ -655,11 +720,59 @@ func (c *Conns) HeadBlock() NewBlockPacket {
 	return c.head.Get()
 }
 
-// UpdateHeadBlock updates the head block if the provided block is newer.
+// headAdvances reports whether packet should replace current as the head.
+// Shared by UpdateHeadBlock's pre-check and its committing update so the two
+// cannot drift apart.
+func headAdvances(current, packet NewBlockPacket) bool {
+	return current.Block == nil ||
+		(packet.Block.NumberU64() > current.Block.NumberU64() && packet.TD.Cmp(current.TD) == 1)
+}
+
+// UpdateHeadBlock updates the head block if the provided block is newer and,
+// when a validator set is configured, signed by a known validator.
 // Returns true if the head block was updated, false otherwise.
+//
+// THE SIGNER CHECK IS LOAD-BEARING, not bookkeeping. The head is peer-supplied:
+// a NewBlock carries its own header and total difficulty, and nothing but this
+// check stops a peer from declaring one. It is read by the status handshake, the
+// gas price oracle, and the transaction validator -- which reads the header's
+// base fee and gas limit -- so a peer that could set the head could also set a
+// base fee of 1e30 and have every honest transaction rejected as
+// fee_cap_below_basefee. Paired with an unbeatable total difficulty, no later
+// block could take the head back and rebroadcasting would stay dead until
+// restart: the feature that exists to stop amplification would become a
+// one-packet kill switch for it.
+//
+// With no validator set configured RecoverSigner reports every block as known,
+// so chains without one behave exactly as before.
 func (c *Conns) UpdateHeadBlock(packet NewBlockPacket) bool {
+	if packet.Block == nil {
+		return false
+	}
+
+	// Compare before recovering. This runs once per peer per block -- thousands
+	// of times per block at fleet --max-peers -- while the signature recovery
+	// below is orders of magnitude more expensive than the comparison and is only
+	// meaningful for a block that would actually advance the head. The update
+	// below re-checks under the write lock, so a head that moves in between is
+	// caught there rather than here.
+	if !headAdvances(c.head.Get(), packet) {
+		return false
+	}
+
+	if signer, known, err := c.RecoverSigner(packet.Block.Header()); !known {
+		log.Debug().
+			Str("hash", packet.Block.Hash().Hex()).
+			Uint64("number", packet.Block.NumberU64()).
+			Str("td", packet.TD.String()).
+			Str("signer", signer.Hex()).
+			AnErr("recover_err", err).
+			Msg("Not advancing head, block signer not in validator set")
+		return false
+	}
+
 	return c.head.Update(func(current NewBlockPacket) (NewBlockPacket, bool) {
-		if current.Block == nil || (packet.Block.NumberU64() > current.Block.NumberU64() && packet.TD.Cmp(current.TD) == 1) {
+		if headAdvances(current, packet) {
 			return packet, true
 		}
 		return current, false
