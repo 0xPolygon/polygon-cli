@@ -33,3 +33,26 @@ type Runner interface {
 	// Returns start time, end time, transaction hash, and any error.
 	Execute(ctx context.Context, cfg *config.Config, deps *Dependencies, opts *bind.TransactOpts) (start, end time.Time, txHash common.Hash, err error)
 }
+
+// InputReserver is implemented by modes that draw each transaction from an
+// external input stream. The runner calls ReserveInput before consuming any
+// per-request resource (nonce, gas budget) so that an exhausted stream is
+// detected while nothing has been taken. The reserved input is handed to
+// Execute through the context via WithInput. ErrInputExhausted stops the
+// test cleanly; any other error fails it.
+type InputReserver interface {
+	ReserveInput(ctx context.Context) (any, error)
+}
+
+type inputKey struct{}
+
+// WithInput attaches a reserved per-request input to ctx for Execute.
+func WithInput(ctx context.Context, input any) context.Context {
+	return context.WithValue(ctx, inputKey{}, input)
+}
+
+// InputFromContext returns the input attached by WithInput, if any.
+func InputFromContext(ctx context.Context) (any, bool) {
+	input := ctx.Value(inputKey{})
+	return input, input != nil
+}
