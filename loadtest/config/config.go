@@ -14,6 +14,7 @@ import (
 	"github.com/0xPolygon/polygon-cli/loadtest/uniswapv3"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/term"
 )
 
 // Mode represents the type of load test to perform.
@@ -35,6 +36,11 @@ const (
 	ModeTransaction
 	ModeUniswapV3
 )
+
+// MaxContractCallDataSize caps --calldata-size. No known chain accepts a
+// transaction anywhere near this large, and each chunk is allocated in full,
+// so the cap mostly guards against typos exhausting memory.
+const MaxContractCallDataSize = 1 << 20
 
 // Config holds all load test parameters.
 type Config struct {
@@ -111,8 +117,13 @@ type Config struct {
 	ContractAddress      string
 	ContractCallData     string
 	ContractCallDataFile string
-	ContractCallPayable  bool
-	BlobFeeCap           uint64
+	// ContractCallDataStdin makes contract-call mode read raw calldata from
+	// stdin, one ContractCallDataSize-byte chunk per transaction, and stop
+	// the test at EOF.
+	ContractCallDataStdin bool
+	ContractCallDataSize  uint64
+	ContractCallPayable   bool
+	BlobFeeCap            uint64
 
 	// Account pool options
 	SendingAccountsCount      uint64
@@ -273,6 +284,29 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if c.ContractCallDataStdin {
+		if c.ContractCallData != "" || c.ContractCallDataFile != "" {
+			return errors.New("--calldata-stdin is mutually exclusive with --calldata and --calldata-file")
+		}
+		if c.ContractCallDataSize == 0 {
+			return errors.New("--calldata-stdin requires --calldata-size to be greater than zero")
+		}
+		if c.ContractCallDataSize > MaxContractCallDataSize {
+			return fmt.Errorf("--calldata-size %d exceeds the maximum of %d bytes", c.ContractCallDataSize, MaxContractCallDataSize)
+		}
+		if c.ReverseNonceOrder {
+			return errors.New("--calldata-stdin is incompatible with --reverse-nonce-order (stopping at EOF would leave the lowest planned nonces unsent, so nothing could ever mine)")
+		}
+		if err := c.validateSoleMode(ModeContractCall, "--calldata-stdin", "contract-call"); err != nil {
+			return err
+		}
+		if stdinIsTerminal() {
+			return errors.New("--calldata-stdin requires stdin to be a pipe or file, not a terminal")
+		}
+	} else if c.ContractCallDataSize != 0 {
+		return errors.New("--calldata-size requires --calldata-stdin")
+	}
+
 	if c.ContractCallDataFile != "" {
 		if c.ContractCallData != "" {
 			return errors.New("--calldata and --calldata-file are mutually exclusive")
@@ -334,6 +368,29 @@ func (c *Config) validateModesSupportRawSend(flagName string) error {
 	}
 
 	return nil
+}
+
+// validateSoleMode checks that the selected modes consist of exactly one mode
+// and that it is want. Used by flags that only make sense for a single mode
+// and cannot be shared with a mode list or random mode.
+func (c *Config) validateSoleMode(want Mode, flagName, modeName string) error {
+	if len(c.Modes) != 1 {
+		return fmt.Errorf("%s requires %s to be the only mode, got %d modes", flagName, modeName, len(c.Modes))
+	}
+	parsed, err := ParseMode(c.Modes[0])
+	if err != nil {
+		return fmt.Errorf("%s: %w", flagName, err)
+	}
+	if parsed != want {
+		return fmt.Errorf("%s requires --mode %s, got %q", flagName, modeName, c.Modes[0])
+	}
+	return nil
+}
+
+// stdinIsTerminal reports whether stdin is an interactive terminal rather
+// than a pipe or file. It is a variable so tests can override it.
+var stdinIsTerminal = func() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 // Validate validates the UniswapV3Config and returns an error if any validation fails.

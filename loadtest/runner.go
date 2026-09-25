@@ -676,6 +676,15 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 	mustCheckMaxBaseFee, maxBaseFeeCtxCancel := r.setupBaseFeeMonitoring(ctx)
 	defer maxBaseFeeCtxCancel()
 
+	// loopCtx governs only the waits that happen before a request has taken
+	// a nonce (rate limiter, input reservation). Cancelling it via stopLoop
+	// lets idle workers exit promptly when a mode reports that its input is
+	// exhausted, while requests that already hold a nonce finish under ctx.
+	loopCtx, stopLoop := context.WithCancel(ctx)
+	defer stopLoop()
+	var stopLogOnce, inputErrOnce sync.Once
+	var inputErr error
+
 	log.Debug().Msg("Starting main load test loop")
 	var wg sync.WaitGroup
 	for routineID := range maxRoutines {
@@ -687,11 +696,11 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 			var tErr error
 			var ltTxHash common.Hash
 			for requestID := range maxRequests {
-				if ctx.Err() != nil {
+				if loopCtx.Err() != nil {
 					return
 				}
 				if r.rl != nil {
-					if waitErr := r.rl.Wait(ctx); waitErr != nil {
+					if waitErr := r.rl.Wait(loopCtx); waitErr != nil {
 						if errors.Is(waitErr, context.Canceled) || errors.Is(waitErr, context.DeadlineExceeded) {
 							return
 						}
@@ -699,12 +708,41 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 					}
 				}
 
-				if ctx.Err() != nil {
+				if loopCtx.Err() != nil {
 					return
 				}
 
 				// Select mode for this request
 				selectedMode := r.selectMode(routineID, requestID)
+
+				// Modes fed by an external input stream reserve their input
+				// here, before a nonce or gas budget is taken, so that an
+				// exhausted stream never leaves a reserved nonce unsent. Once
+				// a nonce is held below, the request always runs to completion.
+				reqCtx := ctx
+				if reserver, ok := selectedMode.(mode.InputReserver); ok {
+					input, reserveErr := reserver.ReserveInput(loopCtx)
+					if reserveErr != nil {
+						if errors.Is(reserveErr, context.Canceled) || errors.Is(reserveErr, context.DeadlineExceeded) {
+							return
+						}
+						stopLoop()
+						if errors.Is(reserveErr, mode.ErrInputExhausted) {
+							stopLogOnce.Do(func() {
+								log.Info().Int64("routineID", routineID).Int64("requestID", requestID).Msg("Input exhausted, stopping load test")
+							})
+						} else {
+							inputErrOnce.Do(func() {
+								inputErr = reserveErr
+								log.Error().Int64("routineID", routineID).Int64("requestID", requestID).Err(reserveErr).Msg("Input source failed, stopping load test")
+							})
+						}
+						return
+					}
+					if input != nil {
+						reqCtx = mode.WithInput(ctx, input)
+					}
+				}
 
 				var account Account
 				account, tErr = r.accountPool.Next(ctx)
@@ -747,7 +785,7 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 				}
 
 				// Execute the selected mode
-				startReq, endReq, ltTxHash, tErr = selectedMode.Execute(ctx, cfg, r.deps, sendingTops)
+				startReq, endReq, ltTxHash, tErr = selectedMode.Execute(reqCtx, cfg, r.deps, sendingTops)
 
 				// Record sample if not fire-and-forget
 				if !cfg.FireAndForget {
@@ -846,6 +884,11 @@ func (r *Runner) mainLoop(ctx context.Context) error {
 		}
 	}
 
+	// A failed input source is a failed run, even though the transactions
+	// that were sent are still accounted for above.
+	if inputErr != nil {
+		return fmt.Errorf("input source failed: %w", inputErr)
+	}
 	return nil
 }
 
@@ -916,8 +959,8 @@ func (r *Runner) parseModes(ctx context.Context) error {
 			return errors.New("raw output is not compatible with UniswapV3 mode")
 		}
 	}
-	if config.HasMode(config.ModeContractCall, cfg.ParsedModes) && (cfg.ContractAddress == "" || cfg.ContractCallData == "") {
-		return errors.New("contract-call mode requires both --contract-address and --calldata flags")
+	if config.HasMode(config.ModeContractCall, cfg.ParsedModes) && (cfg.ContractAddress == "" || (cfg.ContractCallData == "" && !cfg.ContractCallDataStdin)) {
+		return errors.New("contract-call mode requires --contract-address and one of --calldata, --calldata-file or --calldata-stdin")
 	}
 	if cfg.EthCallOnly && config.HasMode(config.ModeBlob, cfg.ParsedModes) {
 		return errors.New("using call only with blobs doesn't make sense")
