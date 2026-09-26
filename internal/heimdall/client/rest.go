@@ -82,11 +82,11 @@ func BuildCurl(req *http.Request, extra map[string]string) (string, error) {
 	}
 	for k, vs := range req.Header {
 		for _, v := range vs {
-			fmt.Fprintf(&b, " -H %q", k+": "+v)
+			fmt.Fprintf(&b, " -H %s", shellQuote(k+": "+v))
 		}
 	}
 	for k, v := range extra {
-		fmt.Fprintf(&b, " -H %q", k+": "+v)
+		fmt.Fprintf(&b, " -H %s", shellQuote(k+": "+v))
 	}
 	if req.Body != nil {
 		body, err := io.ReadAll(req.Body)
@@ -95,10 +95,14 @@ func BuildCurl(req *http.Request, extra map[string]string) (string, error) {
 		}
 		// Restore so the caller can still send it if they want.
 		req.Body = io.NopCloser(bytes.NewReader(body))
-		fmt.Fprintf(&b, " -d %q", string(body))
+		fmt.Fprintf(&b, " -d %s", shellQuote(string(body)))
 	}
-	fmt.Fprintf(&b, " %q", req.URL.String())
+	fmt.Fprintf(&b, " %s", shellQuote(req.URL.String()))
 	return b.String(), nil
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }
 
 // RESTClient wraps net/http for Heimdall's REST gateway.
