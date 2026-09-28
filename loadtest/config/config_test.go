@@ -384,3 +384,141 @@ func TestValidateReceiptPollInterval(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateCalldataStdin(t *testing.T) {
+	tests := []struct {
+		name     string
+		stdin    bool
+		size     uint64
+		calldata string
+		file     string
+		modes    []string
+		terminal bool
+		reverse  bool
+		wantErr  string
+	}{
+		{
+			name:  "valid with cc alias",
+			stdin: true,
+			size:  32,
+			modes: []string{"cc"},
+		},
+		{
+			name:  "valid with full mode name",
+			stdin: true,
+			size:  32,
+			modes: []string{"contract-call"},
+		},
+		{
+			name:    "stdin without size",
+			stdin:   true,
+			modes:   []string{"cc"},
+			wantErr: "--calldata-stdin requires --calldata-size",
+		},
+		{
+			name:    "size without stdin",
+			size:    32,
+			modes:   []string{"cc"},
+			wantErr: "--calldata-size requires --calldata-stdin",
+		},
+		{
+			name:     "stdin with calldata",
+			stdin:    true,
+			size:     32,
+			calldata: "0xdeadbeef",
+			modes:    []string{"cc"},
+			wantErr:  "--calldata-stdin is mutually exclusive with --calldata and --calldata-file",
+		},
+		{
+			name:    "stdin with calldata file",
+			stdin:   true,
+			size:    32,
+			file:    "calldata.hex",
+			modes:   []string{"cc"},
+			wantErr: "--calldata-stdin is mutually exclusive with --calldata and --calldata-file",
+		},
+		{
+			name:    "stdin with transaction mode",
+			stdin:   true,
+			size:    32,
+			modes:   []string{"t"},
+			wantErr: "--calldata-stdin requires --mode contract-call",
+		},
+		{
+			name:    "stdin with mode list",
+			stdin:   true,
+			size:    32,
+			modes:   []string{"cc", "t"},
+			wantErr: "--calldata-stdin requires contract-call to be the only mode",
+		},
+		{
+			name:    "stdin with random mode",
+			stdin:   true,
+			size:    32,
+			modes:   []string{"r"},
+			wantErr: "--calldata-stdin requires --mode contract-call",
+		},
+		{
+			name:     "stdin is a terminal",
+			stdin:    true,
+			size:     32,
+			modes:    []string{"cc"},
+			terminal: true,
+			wantErr:  "--calldata-stdin requires stdin to be a pipe or file",
+		},
+		{
+			name:    "size above cap",
+			stdin:   true,
+			size:    MaxContractCallDataSize + 1,
+			modes:   []string{"cc"},
+			wantErr: "exceeds the maximum",
+		},
+		{
+			name:  "size at cap",
+			stdin: true,
+			size:  MaxContractCallDataSize,
+			modes: []string{"cc"},
+		},
+		{
+			name:    "reverse nonce order",
+			stdin:   true,
+			size:    32,
+			modes:   []string{"cc"},
+			reverse: true,
+			wantErr: "--calldata-stdin is incompatible with --reverse-nonce-order",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orig := stdinIsTerminal
+			stdinIsTerminal = func() bool { return tt.terminal }
+			t.Cleanup(func() { stdinIsTerminal = orig })
+
+			cfg := validConfig()
+			cfg.ContractCallDataStdin = tt.stdin
+			cfg.ContractCallDataSize = tt.size
+			cfg.ContractCallData = tt.calldata
+			cfg.ContractCallDataFile = tt.file
+			cfg.Modes = tt.modes
+			if tt.reverse {
+				cfg.ReverseNonceOrder = true
+				cfg.FireAndForget = true
+			}
+
+			err := cfg.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Validate() unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Validate() expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Validate() error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
