@@ -138,6 +138,28 @@ func TestRESTClientCurlTransport(t *testing.T) {
 	}
 }
 
+func TestBuildCurlShellQuotesValues(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "http://example.test/path?value=$(touch+pwned)", strings.NewReader(`{"name":"O'Reilly","value":"$(id)"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Test", "'$(id)")
+
+	command, err := BuildCurl(req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`-H 'X-Test: '"'"'$(id)'`,
+		`-d '{"name":"O'"'"'Reilly","value":"$(id)"}'`,
+		`'http://example.test/path?value=$(touch+pwned)'`,
+	} {
+		if !strings.Contains(command, want) {
+			t.Errorf("command %q does not contain safely quoted value %q", command, want)
+		}
+	}
+}
+
 func TestExitCodeMappings(t *testing.T) {
 	tests := []struct {
 		name string
