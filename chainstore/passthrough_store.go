@@ -371,8 +371,14 @@ func (s *PassthroughStore) GetFeeHistory(ctx context.Context, blockCount int, ne
 		return nil, fmt.Errorf("eth_feeHistory method not supported")
 	}
 
+	// A nil slice encodes as null, which geth >= 1.17.6 rejects as a missing argument.
+	params := rewardPercentiles
+	if params == nil {
+		params = []float64{}
+	}
+
 	var result FeeHistoryResult
-	err := s.client.CallContext(ctx, &result, "eth_feeHistory", fmt.Sprintf("0x%x", blockCount), newestBlock, rewardPercentiles)
+	err := s.client.CallContext(ctx, &result, "eth_feeHistory", fmt.Sprintf("0x%x", blockCount), newestBlock, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fee history: %w", err)
 	}

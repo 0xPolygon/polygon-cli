@@ -45,8 +45,9 @@ The `--mode` flag is important for this command.
 - `b`/`blob` will send EIP-4844 blob transactions. Use `--blob-fee-cap`
   to set the maximum blob fee per chunk.
 - `cc`/`contract-call` will call a specific contract function. Requires
-  `--contract-address` and either `--calldata` (hex string) or
-  `--calldata-file` (path to a file containing the hex calldata). Use
+  `--contract-address` and one of `--calldata` (hex string),
+  `--calldata-file` (path to a file containing the hex calldata), or
+  `--calldata-stdin` (raw bytes streamed from stdin, see below). Use
   `--contract-call-payable` if the function is payable.
 - `R`/`recall` will attempt to replay all of the transactions from the
   previous blocks. You can use `--recall-blocks` to specify how many
@@ -73,6 +74,45 @@ Here is a simple example that runs 1000 requests at a max rate of 1 request per 
 ```bash
 $ polycli loadtest --verbosity 700 --chain-id 1256 --concurrency 1 --requests 1000 --rate-limit 1 --mode t --rpc-url http://localhost:8888
 ```
+
+### Per-Transaction Calldata from Stdin
+
+`--calldata` and `--calldata-file` send the same calldata in every
+transaction. `--calldata-stdin` instead reads raw bytes from stdin and
+gives each transaction its own `--calldata-size`-byte chunk, so a shell
+pipeline can generate a different payload per transaction. The test
+stops cleanly when stdin reaches EOF or when the request count is
+reached, whichever comes first.
+
+```bash
+$ for i in $(seq 1 10000); do
+    zstdcat receipt-addresses.txt.zst | shuf | head -n 1500 | sed 's/0x//' | tr -d '\n' | xxd -r -p
+  done | polycli loadtest --mode contract-call --contract-address 0x... \
+      --calldata-stdin --calldata-size 30000 --gas-limit 8000000 \
+      --requests 100000 --concurrency 4
+```
+
+Rules for the input:
+
+- Stdin is treated as raw bytes, not hex. Pipe through `xxd -r -p` or
+  similar to convert hex text into bytes.
+- Every chunk is exactly `--calldata-size` bytes. A trailing partial
+  chunk at EOF is discarded with a warning.
+- No function selector is added. Prepend one in the input if the target
+  function needs it.
+- `--calldata-stdin` requires `contract-call` to be the only mode and is
+  mutually exclusive with `--calldata`, `--calldata-file`, and
+  `--reverse-nonce-order`. Stdin must be a pipe or file, not a terminal,
+  and `--calldata-size` is capped at 1 MiB.
+- A read error on stdin, such as the producer dying mid-stream, stops the
+  test like EOF does but exits non-zero so a broken pipeline is not
+  mistaken for a clean finish.
+- Set `--gas-limit`. Without it every transaction is gas estimated,
+  adding one RPC call per send.
+- The producer is the throughput ceiling. If the pipeline generates
+  chunks slower than polycli can send them, the rate limiter is never the
+  binding constraint. Pregenerate to a file and redirect it if that
+  matters.
 
 ### Separate Broadcast Endpoint
 
@@ -229,6 +269,8 @@ The codebase has a contract that used for load testing. It's written in Solidity
       --block-batch-size uint                            number of blocks to fetch per RPC batch request for recall and rpc modes (default 25)
       --calldata string                                  hex encoded calldata: function signature + encoded arguments (requires --mode contract-call and --contract-address)
       --calldata-file string                             path to a file containing hex encoded calldata (alternative to --calldata; mutually exclusive with it)
+      --calldata-size uint                               bytes of stdin consumed as calldata for each transaction (requires --calldata-stdin)
+      --calldata-stdin                                   read raw calldata from stdin, one --calldata-size chunk per transaction; test stops at EOF (requires --mode contract-call, mutually exclusive with --calldata and --calldata-file)
       --chain-id uint                                    chain ID for the transactions
       --check-balance-before-funding                     check account balance before funding sending accounts (saves gas when accounts are already funded)
       --check-preconf                                    check for preconf status after sending tx
