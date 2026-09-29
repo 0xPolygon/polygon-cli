@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/0xPolygon/polygon-cli/bindings/multicall3"
@@ -210,42 +211,56 @@ func Multicall3FundAccountsWithNativeToken(c *ethclient.Client, tops *bind.Trans
 	return sc.Aggregate3Value(tops, calls)
 }
 
-func Multicall3FundAccountsWithERC20Token(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, accounts []common.Address, tokenAddress common.Address, amount *big.Int, customAddr *common.Address) (approveTx, transfersTx *types.Transaction, err error) {
-	scAddr, sc, err := Multicall3New(c, customAddr)
+// Multicall3ApproveERC20Token approves the multicall3 contract to spend
+// totalAmount of the ERC20 token on behalf of tops.From and waits for the
+// approval to be mined. A single approval can cover several subsequent
+// Multicall3FundAccountsWithERC20Token calls.
+func Multicall3ApproveERC20Token(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, tokenAddress common.Address, totalAmount *big.Int, customAddr *common.Address) (*types.Transaction, error) {
+	scAddr, _, err := Multicall3New(c, customAddr)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	erc20, err := tokens.NewERC20(tokenAddress, c)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	// Calculate total amount to approve
-	totalAmount := big.NewInt(0).Mul(amount, big.NewInt(int64(len(accounts))))
-
-	// Prepare approve calldata for the Multicall3 contract to spend tokens
-	approveTx, err = erc20.Approve(tops, scAddr, totalAmount)
+	approveTx, err := erc20.Approve(tops, scAddr, totalAmount)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	receipt, err := bind.WaitMined(ctx, c, approveTx.Hash())
-	if err != nil || receipt == nil || receipt.Status != 1 {
-		log.Error().Err(err).Msg("Failed to mine approval transaction")
-		return approveTx, nil, err
+	if err != nil {
+		return approveTx, fmt.Errorf("failed to wait for approval transaction %s: %w", approveTx.Hash(), err)
+	}
+	if receipt == nil || receipt.Status != types.ReceiptStatusSuccessful {
+		return approveTx, fmt.Errorf("approval transaction %s was mined but failed", approveTx.Hash())
+	}
+	return approveTx, nil
+}
+
+// Multicall3FundAccountsWithERC20Token sends a single multicall3 transaction
+// that transfers amount of the ERC20 token from tops.From to each account.
+// The multicall3 contract must already have been approved to spend at least
+// amount * len(accounts) tokens, see Multicall3ApproveERC20Token.
+func Multicall3FundAccountsWithERC20Token(c *ethclient.Client, tops *bind.TransactOpts, accounts []common.Address, tokenAddress common.Address, amount *big.Int, customAddr *common.Address) (*types.Transaction, error) {
+	_, sc, err := Multicall3New(c, customAddr)
+	if err != nil {
+		return nil, err
 	}
 
 	erc20ABI, err := tokens.ERC20MetaData.GetAbi()
 	if err != nil {
-		return approveTx, nil, err
+		return nil, err
 	}
 
 	calls := make([]multicall3.Multicall3Call3, 0, len(accounts))
 	for _, account := range accounts {
 		callData, iErr := erc20ABI.Pack("transferFrom", tops.From, account, amount)
 		if iErr != nil {
-			return approveTx, nil, iErr
+			return nil, iErr
 		}
 
 		calls = append(calls, multicall3.Multicall3Call3{
@@ -255,10 +270,5 @@ func Multicall3FundAccountsWithERC20Token(ctx context.Context, c *ethclient.Clie
 		})
 	}
 
-	transfersTx, err = sc.Aggregate3(tops, calls)
-	if err != nil {
-		return approveTx, nil, err
-	}
-
-	return approveTx, transfersTx, nil
+	return sc.Aggregate3(tops, calls)
 }

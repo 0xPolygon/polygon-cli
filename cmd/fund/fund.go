@@ -419,6 +419,149 @@ func fundWalletsWithFunder(ctx context.Context, c *ethclient.Client, tops *bind.
 	return nil
 }
 
+const (
+	// maxFundingTxSendAttempts is the number of times a single multicall3
+	// funding transaction is sent before its nonce is treated as a gap.
+	maxFundingTxSendAttempts = 3
+	// fundingTxSendBackoff is the base delay between send attempts. The delay
+	// grows linearly with the attempt number.
+	fundingTxSendBackoff = time.Second
+)
+
+// fundingBatch is a group of wallets funded by a single multicall3
+// transaction. Nonces are assigned to all batches before any of them is sent,
+// so batches can be broadcast concurrently without racing each other on the
+// funder's pending nonce.
+type fundingBatch struct {
+	index    int
+	nonce    uint64
+	accounts []common.Address
+	tx       *types.Transaction
+	err      error
+}
+
+// splitIntoBatches groups wallets into batches of at most batchSize accounts,
+// skipping the funder address. Batch order follows wallet order.
+func splitIntoBatches(wallets []common.Address, funder common.Address, batchSize uint64) []*fundingBatch {
+	if batchSize == 0 {
+		return nil
+	}
+	var batches []*fundingBatch
+	var accs []common.Address
+	flush := func() {
+		if len(accs) == 0 {
+			return
+		}
+		batches = append(batches, &fundingBatch{index: len(batches), accounts: accs})
+		accs = nil
+	}
+	for _, wallet := range wallets {
+		if wallet == funder {
+			continue
+		}
+		accs = append(accs, wallet)
+		if uint64(len(accs)) == batchSize {
+			flush()
+		}
+	}
+	flush()
+	return batches
+}
+
+// firstFailedBatch returns the index of the lowest-nonce batch whose send
+// failed, or -1 if every batch was sent.
+func firstFailedBatch(batches []*fundingBatch) int {
+	for _, b := range batches {
+		if b.err != nil {
+			return b.index
+		}
+	}
+	return -1
+}
+
+// summarizeSendFailures builds the error returned when at least one batch
+// could not be sent. It lists every failed batch and, because nonces were
+// preassigned, warns about the higher-nonce transactions that were sent but
+// cannot be mined until the gap is filled.
+func summarizeSendFailures(batches []*fundingBatch, firstFailed int) error {
+	var errs []error
+	unfunded := 0
+	stranded := 0
+	for _, b := range batches {
+		if b.err != nil {
+			unfunded += len(b.accounts)
+			errs = append(errs, fmt.Errorf("batch %d (nonce %d, %d accounts) was not sent: %w", b.index+1, b.nonce, len(b.accounts), b.err))
+			continue
+		}
+		if b.index > firstFailed {
+			stranded++
+		}
+	}
+	msg := fmt.Sprintf("%d of %d funding transactions were not sent, %d accounts were not funded", len(errs), len(batches), unfunded)
+	if stranded > 0 {
+		msg += fmt.Sprintf("; %d transaction(s) with nonces above %d were sent but will stay pending until the nonce gap is filled, run `polycli fix-nonce-gap` for the funding account to recover them",
+			stranded, batches[firstFailed].nonce)
+	}
+	return errors.Join(append([]error{errors.New(msg)}, errs...)...)
+}
+
+// sendFundingBatch broadcasts the multicall3 transaction for a batch using its
+// preassigned nonce, retrying with backoff on failure.
+func sendFundingBatch(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, b *fundingBatch, totalBatches int, tokenAddress *common.Address, multicall3Addr *common.Address, rl *rate.Limiter) (*types.Transaction, error) {
+	// Each batch needs its own copy: the nonce differs per batch and the
+	// multicall3 helpers mutate tops.Value.
+	topsCopy := *tops
+	topsCopy.Nonce = new(big.Int).SetUint64(b.nonce)
+
+	var lastErr error
+	for attempt := 1; attempt <= maxFundingTxSendAttempts; attempt++ {
+		if rl != nil {
+			if err := rl.Wait(ctx); err != nil {
+				return nil, err
+			}
+		}
+
+		var tx *types.Transaction
+		var err error
+		if tokenAddress != nil {
+			tx, err = util.Multicall3FundAccountsWithERC20Token(c, &topsCopy, b.accounts, *tokenAddress, params.TokenAmount, multicall3Addr)
+		} else {
+			tx, err = util.Multicall3FundAccountsWithNativeToken(c, &topsCopy, b.accounts, params.FundingAmountInWei, multicall3Addr)
+		}
+		if err == nil {
+			log.Info().
+				Stringer("txHash", tx.Hash()).
+				Int("batch", b.index+1).
+				Int("of", totalBatches).
+				Uint64("nonce", b.nonce).
+				Int("accounts", len(b.accounts)).
+				Msg("multicall3 transaction to fund accounts sent")
+			return tx, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			break
+		}
+		if attempt < maxFundingTxSendAttempts {
+			delay := fundingTxSendBackoff * time.Duration(attempt)
+			log.Warn().Err(err).
+				Int("batch", b.index+1).
+				Uint64("nonce", b.nonce).
+				Int("attempt", attempt).
+				Dur("retryIn", delay).
+				Msg("failed to send multicall3 transaction to fund accounts, retrying")
+			timer := time.NewTimer(delay)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			}
+		}
+	}
+	return nil, fmt.Errorf("failed after %d attempts: %w", maxFundingTxSendAttempts, lastErr)
+}
+
 func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *bind.TransactOpts, wallets []common.Address, multicall3Addr *common.Address) error {
 	log.Debug().
 		Msg("funding wallets with multicall3")
@@ -433,122 +576,120 @@ func fundWalletsWithMulticall3(ctx context.Context, c *ethclient.Client, tops *b
 	if params.AccountsPerFundingTx > 0 && params.AccountsPerFundingTx < accsToFundPerTx {
 		accsToFundPerTx = params.AccountsPerFundingTx
 	}
+	if accsToFundPerTx == 0 {
+		return errors.New("number of accounts to fund per transaction must be greater than zero")
+	}
 	log.Debug().Uint64("accsToFundPerTx", accsToFundPerTx).Msg("Multicall3 max accounts to fund per tx")
-	chSize := (uint64(len(wallets)) / accsToFundPerTx) + 1
 
-	var txsCh chan *types.Transaction
-	if params.TokenAddress == "" {
-		txsCh = make(chan *types.Transaction, chSize)
-	} else {
-		txsCh = make(chan *types.Transaction, chSize*2)
+	batches := splitIntoBatches(wallets, tops.From, accsToFundPerTx)
+	if len(batches) == 0 {
+		return errors.New("no wallet to fund")
+	}
+	totalAccounts := 0
+	for _, b := range batches {
+		totalAccounts += len(b.accounts)
 	}
 
-	errCh := make(chan error, chSize)
-
-	accs := []common.Address{}
-	wg := sync.WaitGroup{}
 	rl := rate.NewLimiter(rate.Limit(params.RateLimit), 1)
 	if params.RateLimit <= 0.0 {
 		rl = nil
 	}
-	for i := range wallets {
-		wallet := wallets[i]
-		// if account is the funding account, skip it
-		if wallet == tops.From {
-			continue
-		}
-		accs = append(accs, wallet)
 
-		if uint64(len(accs)) == accsToFundPerTx || i == len(wallets)-1 {
-			wg.Add(1)
-			// Give each goroutine its own copy since the multicall3 helpers
-			// mutate tops.Value.
-			topsCopy := *tops
-			go func(tops *bind.TransactOpts, accs []common.Address) {
-				defer wg.Done()
-				var iErr error
-				if rl != nil {
-					iErr = rl.Wait(ctx)
-					if iErr != nil {
-						log.Error().Err(iErr).Msg("Rate limiter wait failed before funding accounts with multicall3")
-						return
-					}
-				}
-				var tx *types.Transaction
-				if params.TokenAddress != "" {
-					tokenAddress := common.HexToAddress(params.TokenAddress)
-					var txApprove *types.Transaction
-					txApprove, tx, iErr = util.Multicall3FundAccountsWithERC20Token(ctx, c, tops, accs, tokenAddress, params.TokenAmount, multicall3Addr)
-					if txApprove != nil {
-						log.Info().
-							Stringer("txHash", txApprove.Hash()).
-							Int("done", i+1).
-							Uint64("of", uint64(len(wallets))).
-							Msg("transaction to approve ERC20 token spending by multicall3 sent")
-						txsCh <- txApprove
-					}
-				} else {
-					tx, iErr = util.Multicall3FundAccountsWithNativeToken(c, tops, accs, params.FundingAmountInWei, multicall3Addr)
-				}
-				if iErr != nil {
-					errCh <- iErr
-					log.Error().Err(iErr).Msg("Failed to fund accounts with multicall3")
-					return
-				}
-				log.Info().
-					Stringer("txHash", tx.Hash()).
-					Int("done", i+1).
-					Uint64("of", uint64(len(wallets))).
-					Msg("multicall3 transaction to fund accounts sent")
-				txsCh <- tx
-			}(&topsCopy, accs)
-			accs = []common.Address{}
+	// In ERC20 mode a single approval covers every batch, so the per-batch
+	// transactions only need one nonce each and never wait on their own
+	// approval to be mined.
+	var tokenAddress *common.Address
+	if params.TokenAddress != "" {
+		addr := common.HexToAddress(params.TokenAddress)
+		tokenAddress = &addr
+		totalAmount := new(big.Int).Mul(params.TokenAmount, big.NewInt(int64(totalAccounts)))
+		if rl != nil {
+			if err = rl.Wait(ctx); err != nil {
+				return err
+			}
 		}
+		var approveTx *types.Transaction
+		approveTx, err = util.Multicall3ApproveERC20Token(ctx, c, tops, addr, totalAmount, multicall3Addr)
+		if err != nil {
+			return fmt.Errorf("failed to approve multicall3 to spend ERC20 tokens: %w", err)
+		}
+		log.Info().
+			Stringer("txHash", approveTx.Hash()).
+			Str("totalAmount", totalAmount.String()).
+			Msg("multicall3 approved to spend ERC20 tokens on behalf of the funding account")
+	}
+
+	// Read the funder's pending nonce once and hand each batch its own nonce.
+	// Letting every goroutine ask the node for the pending nonce races: two
+	// batches read the same value and the second broadcast is rejected as an
+	// underpriced replacement, or worse, silently replaces the first.
+	startNonce, err := c.PendingNonceAt(ctx, tops.From)
+	if err != nil {
+		return fmt.Errorf("failed to get pending nonce for %s: %w", tops.From, err)
+	}
+	for _, b := range batches {
+		b.nonce = startNonce + uint64(b.index)
+	}
+	log.Info().
+		Int("batches", len(batches)).
+		Int("accounts", totalAccounts).
+		Uint64("firstNonce", startNonce).
+		Uint64("lastNonce", batches[len(batches)-1].nonce).
+		Msg("sending multicall3 funding transactions")
+
+	var wg sync.WaitGroup
+	for _, b := range batches {
+		wg.Add(1)
+		go func(b *fundingBatch) {
+			defer wg.Done()
+			b.tx, b.err = sendFundingBatch(ctx, c, tops, b, len(batches), tokenAddress, multicall3Addr, rl)
+			if b.err != nil {
+				log.Error().Err(b.err).
+					Int("batch", b.index+1).
+					Uint64("nonce", b.nonce).
+					Msg("Failed to send multicall3 transaction to fund accounts")
+			}
+		}(b)
 	}
 	wg.Wait()
-	close(txsCh)
-	close(errCh)
 
-	var combinedErrors error
-	for len(errCh) > 0 {
-		err = <-errCh
-		if combinedErrors == nil {
-			combinedErrors = err
-		} else {
-			combinedErrors = errors.Join(combinedErrors, err)
-		}
-	}
-	// return if there were errors sending the funding transactions
-	if combinedErrors != nil {
-		return combinedErrors
+	// Transactions below the first failed nonce can still be mined, so confirm
+	// those before reporting. Anything above the gap stays pending.
+	firstFailed := firstFailedBatch(batches)
+	confirmable := batches
+	if firstFailed >= 0 {
+		confirmable = batches[:firstFailed]
+	} else {
+		log.Info().Msg("All funding transactions sent, waiting for confirmation")
 	}
 
-	log.Info().Msg("All funding transactions sent, waiting for confirmation")
-
-	// ensure the txs to fund sending accounts using multicall3 were mined successfully
-	for tx := range txsCh {
+	for _, b := range confirmable {
 		if rl != nil {
-			err := rl.Wait(ctx)
-			if err != nil {
+			if err = rl.Wait(ctx); err != nil {
 				return err
 			}
 		}
 
-		r, err := util.WaitReceipt(ctx, c, tx.Hash())
+		r, err := util.WaitReceipt(ctx, c, b.tx.Hash())
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to wait for transaction to fund accounts with multicall3")
 			return err
 		}
 		if r == nil || r.Status != types.ReceiptStatusSuccessful {
-			errMsg := fmt.Sprintf("transaction to fund accounts with multicall3 failed, receipt is nil or status is not successful, txHash: %s", tx.Hash().String())
+			errMsg := fmt.Sprintf("transaction to fund accounts with multicall3 failed, receipt is nil or status is not successful, txHash: %s", b.tx.Hash().String())
 			log.Error().Msg(errMsg)
 			return errors.New(errMsg)
 		}
 		log.Info().
-			Stringer("txHash", tx.Hash()).
+			Stringer("txHash", b.tx.Hash()).
+			Int("batch", b.index+1).
+			Int("of", len(batches)).
 			Msg("transaction confirmed")
 	}
 
+	if firstFailed >= 0 {
+		return summarizeSendFailures(batches, firstFailed)
+	}
 	return nil
 }
 
