@@ -31,7 +31,7 @@ require (
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/text v0.42.0
 	golang.org/x/time v0.16.0
-	google.golang.org/api v0.299.0
+	google.golang.org/api v0.300.0
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -93,7 +93,7 @@ require (
 
 require (
 	cloud.google.com/go v0.123.0 // indirect
-	cloud.google.com/go/compute/metadata v0.9.1 // indirect
+	cloud.google.com/go/compute/metadata v0.10.0 // indirect
 	github.com/DataDog/zstd v1.5.7 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec // indirect
@@ -118,7 +118,7 @@ require (
 	github.com/google/s2a-go v0.1.10 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.22 // indirect
-	github.com/googleapis/gax-go/v2 v2.24.1 // indirect
+	github.com/googleapis/gax-go/v2 v2.26.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.3.2
@@ -193,8 +193,8 @@ require (
 )
 
 require (
-	cloud.google.com/go/auth v0.23.3 // indirect
-	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
+	cloud.google.com/go/auth v0.24.0 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.3.0 // indirect
 	cloud.google.com/go/iam v1.12.0 // indirect
 	cloud.google.com/go/longrunning v1.2.0 // indirect
 	github.com/0xPolygon/cdk-rpc v0.0.0-20250213125803-179882ad6229
