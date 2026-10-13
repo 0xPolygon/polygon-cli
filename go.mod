@@ -41,7 +41,6 @@ require (
 	github.com/ClickHouse/ch-go v0.74.0 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251213223233-751f36331c62 // indirect
 	github.com/andybalholm/brotli v1.2.2 // indirect
-	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
@@ -176,7 +175,7 @@ require (
 	github.com/0xPolygon/cdk-contracts-tooling v0.0.1
 	github.com/ClickHouse/clickhouse-go/v2 v2.48.0
 	github.com/btcsuite/btcd/btcutil v1.2.0
-	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
+	github.com/chromedp/cdproto v0.157.9
 	github.com/chromedp/chromedp v0.16.0
 	github.com/cometbft/cometbft v0.38.21
 	github.com/docker/docker v28.5.2+incompatible
