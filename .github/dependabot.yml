@@ -1,12 +1,19 @@
 version: 2
 
-updates:
-  - package-ecosystem: gomod
-    directory: "/"
+multi-ecosystem-groups:
+  all-deps:
     schedule:
       interval: weekly
 
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    patterns:
+      - "*"
+    multi-ecosystem-group: all-deps
+
   - package-ecosystem: github-actions
     directory: "/"
-    schedule:
-      interval: weekly
+    patterns:
+      - "*"
+    multi-ecosystem-group: all-deps
