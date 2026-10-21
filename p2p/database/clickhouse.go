@@ -29,8 +29,14 @@ import (
 // inserts. Buffers are fixed-size and drop-on-full so a slow database can never
 // stall the sensor or exhaust memory.
 const (
-	chFlushInterval = 1 * time.Second
-	chFlushTimeout  = 30 * time.Second
+	// DefaultClickHouseFlushInterval is how often each batcher flushes when its
+	// batch is not yet full. It was 1s, which with seven sensors meant ~5 inserts a
+	// second per table of 1 to a few hundred rows each; every insert is a new part,
+	// and merging those parts back together was most of the ClickHouse VM's CPU.
+	// Rows reach ClickHouse up to this much later; the sensor's own backfill check
+	// reads the in-memory block cache first, so it is unaffected.
+	DefaultClickHouseFlushInterval = 5 * time.Second
+	chFlushTimeout                 = 30 * time.Second
 	// chMaxFlushAttempts bounds retries of a failed batch insert. Each retry is
 	// immediate with a fresh connection, recovering from stale-connection and
 	// transient errors without delaying shutdown.
@@ -83,6 +89,7 @@ type ClickHouse struct {
 	shouldWriteTransactionEvents     bool
 	shouldWriteFirstTransactionEvent bool
 	shouldWritePeers                 bool
+	flushInterval                    time.Duration
 
 	blocks      *rowBatcher[chBlock]
 	blockBodies *rowBatcher[chBlockBody]
@@ -124,6 +131,9 @@ type ClickHouseOptions struct {
 	ShouldWriteTransactionEvents     bool
 	ShouldWriteFirstTransactionEvent bool
 	ShouldWritePeers                 bool
+	// FlushInterval is how often batchers flush a partial batch. Zero means
+	// DefaultClickHouseFlushInterval.
+	FlushInterval time.Duration
 }
 
 // NewClickHouse connects to ClickHouse, verifies connectivity, and starts the
@@ -142,6 +152,10 @@ func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 		shouldWriteTransactionEvents:     opts.ShouldWriteTransactionEvents,
 		shouldWriteFirstTransactionEvent: opts.ShouldWriteFirstTransactionEvent,
 		shouldWritePeers:                 opts.ShouldWritePeers,
+		flushInterval:                    opts.FlushInterval,
+	}
+	if c.flushInterval <= 0 {
+		c.flushInterval = DefaultClickHouseFlushInterval
 	}
 
 	conn, err := connectClickHouse(ctx, opts.DSN)
@@ -291,7 +305,7 @@ func (c *ClickHouse) startBatchers(ctx context.Context) {
 // the INSERT, append rows, send, retrying transient failures. Only appendRow
 // varies per table.
 func newInsertBatcher[T any](ctx context.Context, c *ClickHouse, name string, maxRows int, query string, appendRow func(driver.Batch, T) error) *rowBatcher[T] {
-	return newRowBatcher(ctx, &c.wg, name, maxRows, func(rows []T) error {
+	return newRowBatcher(ctx, &c.wg, name, maxRows, c.flushInterval, func(rows []T) error {
 		var err error
 		for attempt := 1; attempt <= chMaxFlushAttempts; attempt++ {
 			if err = flushBatch(c.conn, query, rows, appendRow); err == nil {
@@ -931,23 +945,25 @@ func (c *ClickHouse) writeTxs(txs []*types.Transaction, tfs time.Time) {
 // --- batching --------------------------------------------------------------
 
 // rowBatcher buffers rows and flushes them in bulk when the buffer reaches
-// maxRows or on a fixed interval. add is non-blocking: rows are dropped and
+// maxRows or every interval. add is non-blocking: rows are dropped and
 // counted when the fixed-size buffer is full, so a slow database never stalls
 // the sensor hot path.
 type rowBatcher[T any] struct {
-	name    string
-	in      chan T
-	maxRows int
-	flush   func([]T) error
-	dropped atomic.Uint64
+	name     string
+	in       chan T
+	maxRows  int
+	interval time.Duration
+	flush    func([]T) error
+	dropped  atomic.Uint64
 }
 
-func newRowBatcher[T any](ctx context.Context, wg *sync.WaitGroup, name string, maxRows int, flush func([]T) error) *rowBatcher[T] {
+func newRowBatcher[T any](ctx context.Context, wg *sync.WaitGroup, name string, maxRows int, interval time.Duration, flush func([]T) error) *rowBatcher[T] {
 	b := &rowBatcher[T]{
-		name:    name,
-		in:      make(chan T, maxRows*2),
-		maxRows: maxRows,
-		flush:   flush,
+		name:     name,
+		in:       make(chan T, maxRows*2),
+		maxRows:  maxRows,
+		interval: interval,
+		flush:    flush,
 	}
 	wg.Add(1)
 	go func() {
@@ -966,7 +982,7 @@ func (b *rowBatcher[T]) add(v T) {
 }
 
 func (b *rowBatcher[T]) loop(ctx context.Context) {
-	ticker := time.NewTicker(chFlushInterval)
+	ticker := time.NewTicker(b.interval)
 	defer ticker.Stop()
 
 	buf := make([]T, 0, b.maxRows)
