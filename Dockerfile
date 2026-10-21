@@ -6,7 +6,7 @@
 # the target arch. CGO is required (vectorized-poseidon-gold has no pure-Go
 # path), so cross-compiling with a real C toolchain avoids the very slow QEMU
 # emulation a per-platform native build would need.
-FROM --platform=$BUILDPLATFORM golang:1.26 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.10 AS build
 
 # TARGETARCH is provided automatically by buildx (amd64, arm64, ...).
 ARG TARGETARCH

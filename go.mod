@@ -1,6 +1,6 @@
 module github.com/0xPolygon/polygon-cli
 
-go 1.26.0
+go 1.26.10
 
 require (
 	cloud.google.com/go/datastore v1.27.0
