@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 
 env:
-  GO_VERSION: "1.26.0"
+  GO_VERSION: "1.26.10"
   FOUNDRY_VERSION: stable
 
 jobs:

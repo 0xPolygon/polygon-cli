@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.26.0"
+  GO_VERSION: "1.26.10"
 
 jobs:
   manual-release:
