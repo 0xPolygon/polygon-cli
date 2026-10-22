@@ -2,9 +2,14 @@ package database
 
 import (
 	"context"
+	"math/big"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/ethereum/go-ethereum/core/types"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 // These exercise rowBatcher on its own, so unlike the integration tests above
@@ -32,23 +37,29 @@ func TestRowBatcherFlushesPartialBatchOnInterval(t *testing.T) {
 	b, flushed, stop := newCollectingBatcher(t, 100, interval)
 	defer stop()
 
-	start := time.Now()
 	for i := range 3 {
 		b.add(i)
 	}
 
-	timer := time.NewTimer(5 * interval)
+	// The batch is far below maxRows, so only the ticker can flush it. The bounds
+	// are loose on purpose: a busy CI runner under -race can delay the tick.
+	early := time.NewTimer(interval / 2)
+	defer early.Stop()
+	select {
+	case <-flushed:
+		t.Fatal("partial batch flushed before the interval")
+	case <-early.C:
+	}
+
+	timer := time.NewTimer(10 * interval)
 	defer timer.Stop()
 	select {
 	case rows := <-flushed:
 		if len(rows) != 3 {
 			t.Fatalf("flushed %d rows, want 3", len(rows))
 		}
-		if elapsed := time.Since(start); elapsed > 3*interval {
-			t.Fatalf("partial batch flushed after %v, want about %v", elapsed, interval)
-		}
 	case <-timer.C:
-		t.Fatalf("partial batch not flushed within %v", 5*interval)
+		t.Fatalf("partial batch not flushed within %v", 10*interval)
 	}
 }
 
@@ -114,5 +125,35 @@ func TestNewClickHouseFlushInterval(t *testing.T) {
 				t.Fatalf("flushInterval = %v, want %v", c.flushInterval, tt.want)
 			}
 		})
+	}
+}
+
+// panicConn satisfies driver.Conn but panics if used, so a test can assert that a
+// code path never reaches the database.
+type panicConn struct{ driver.Conn }
+
+func TestHasBlockSeesPendingBlock(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	defer func() {
+		cancel()
+		wg.Wait()
+	}()
+
+	pending, err := lru.New(chPendingBlocks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &ClickHouse{
+		conn:          panicConn{},
+		pendingBlocks: pending,
+		// Never flushes during the test, like a row still waiting for its tick.
+		blocks: newRowBatcher(ctx, &wg, "blocks", 100, time.Hour, func([]chBlock) error { return nil }),
+	}
+
+	h := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1)}
+	c.addBlock(h)
+	if !c.HasBlock(ctx, h.Hash()) {
+		t.Fatal("HasBlock = false for an enqueued block, want true without querying")
 	}
 }

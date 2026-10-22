@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,8 +34,8 @@ const (
 	// batch is not yet full. It was 1s, which with seven sensors meant ~5 inserts a
 	// second per table of 1 to a few hundred rows each; every insert is a new part,
 	// and merging those parts back together was most of the ClickHouse VM's CPU.
-	// Rows reach ClickHouse up to this much later; the sensor's own backfill check
-	// reads the in-memory block cache first, so it is unaffected.
+	// Rows reach ClickHouse up to this much later; HasBlock also checks
+	// pendingBlocks, so the sensor's own backfill check is unaffected.
 	DefaultClickHouseFlushInterval = 5 * time.Second
 	chFlushTimeout                 = 30 * time.Second
 	// chMaxFlushAttempts bounds retries of a failed batch insert. Each retry is
@@ -55,6 +56,10 @@ const (
 	// stall that peer for the pool's dial timeout on every block. An indexed lookup
 	// against a healthy backend is far below this.
 	chHasBlockTimeout = 2 * time.Second
+	// chPendingBlocks bounds the set of recently enqueued block hashes HasBlock
+	// consults. It only needs to span one flush interval, a handful of blocks plus
+	// any parents backfilled in that time.
+	chPendingBlocks = 1024
 )
 
 // Event sources, so consumers can tell a hash announcement from a delivered
@@ -90,6 +95,13 @@ type ClickHouse struct {
 	shouldWriteFirstTransactionEvent bool
 	shouldWritePeers                 bool
 	flushInterval                    time.Duration
+
+	// pendingBlocks holds hashes of recently enqueued block rows. A row sits in its
+	// batcher for up to flushInterval before ClickHouse can see it, and without this
+	// HasBlock would report a just-written parent as missing and trigger a needless
+	// backfill. Entries outlive the flush, which is harmless: the row is stored by
+	// then, or its insert failed after retries and the block is lost either way.
+	pendingBlocks *lru.Cache
 
 	blocks      *rowBatcher[chBlock]
 	blockBodies *rowBatcher[chBlockBody]
@@ -157,6 +169,8 @@ func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 	if c.flushInterval <= 0 {
 		c.flushInterval = DefaultClickHouseFlushInterval
 	}
+	// lru.New only errors on a non-positive size.
+	c.pendingBlocks, _ = lru.New(chPendingBlocks)
 
 	conn, err := connectClickHouse(ctx, opts.DSN)
 	if err != nil {
@@ -503,7 +517,7 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 		})
 	}
 	if c.shouldWriteBlocks {
-		c.blocks.add(newChBlock(block.Header()))
+		c.addBlock(block.Header())
 		c.writeBlockBody(block.Hash(), block.Transactions(), block.Uncles(), tfs)
 	}
 	if c.shouldWriteTransactions {
@@ -533,7 +547,7 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 		// A header row is complete on its own: the fields it cannot carry (tx/uncle
 		// counts) live in block_bodies, so this path can never overwrite them.
 		if c.shouldWriteBlocks {
-			c.blocks.add(newChBlock(h))
+			c.addBlock(h)
 		}
 		if c.recordsBlockEvents() {
 			c.blockEvt.add(chBlockEvent{
@@ -727,8 +741,14 @@ func (c *ClickHouse) startUnavailableWarning(ctx context.Context) {
 // The deadline matters because this runs inline in the per-peer message loop on a
 // context with no deadline of its own: an unreachable backend would otherwise block
 // that peer for the driver's dial timeout on every single block.
+// addBlock enqueues a header row and records its hash as pending for HasBlock.
+func (c *ClickHouse) addBlock(h *types.Header) {
+	c.blocks.add(newChBlock(h))
+	c.pendingBlocks.Add(h.Hash(), struct{}{})
+}
+
 func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
-	if c.conn == nil {
+	if c.conn == nil || c.pendingBlocks.Contains(hash) {
 		return true
 	}
 
