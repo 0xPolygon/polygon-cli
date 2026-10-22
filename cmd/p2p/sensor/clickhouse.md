@@ -329,10 +329,11 @@ Three traps in the derived layer:
 
 This backend is **pure append**. No `Write*` method reads a row back in order to
 modify it; the only read on the path is `HasBlock`, used to decide whether to
-backfill a missing parent.
+backfill a missing parent. It checks the hashes of recently enqueued block rows
+before querying, so a parent still waiting in its batch is not fetched again.
 
-Every write enqueues onto a per-table `rowBatcher` that flushes on a 1s tick or a
-size threshold, retrying a failed batch up to 3 times. `add` is **non-blocking with
+Every write enqueues onto a per-table `rowBatcher` that flushes every
+`--clickhouse-flush-interval` (default 5s) or at a size threshold, retrying a failed batch up to 3 times. `add` is **non-blocking with
 drop-on-full**, so a slow or unreachable database can never stall the sensor's hot
 path — it drops rows and logs the count instead.
 

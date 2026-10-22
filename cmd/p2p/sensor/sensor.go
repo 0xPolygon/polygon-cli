@@ -44,6 +44,7 @@ type (
 		ProjectID                        string
 		DatabaseID                       string
 		ClickHouseDSN                    string
+		ClickHouseFlushInterval          time.Duration
 		SensorID                         string
 		MaxPeers                         int
 		MaxDatabaseConcurrency           int
@@ -203,6 +204,9 @@ var SensorCmd = &cobra.Command{
 		// and the database is open, i.e. a crash loop rather than a startup error.
 		if inputSensorParams.PeerSnapshotInterval <= 0 {
 			return errors.New("--peer-snapshot-interval must be greater than zero")
+		}
+		if inputSensorParams.ClickHouseFlushInterval <= 0 {
+			return errors.New("--clickhouse-flush-interval must be greater than zero")
 		}
 
 		return nil
@@ -553,6 +557,7 @@ func newDatabase(ctx context.Context) (database.Database, error) {
 			ShouldWriteTransactionEvents:     inputSensorParams.ShouldWriteTransactionEvents,
 			ShouldWriteFirstTransactionEvent: inputSensorParams.ShouldWriteFirstTransactionEvent,
 			ShouldWritePeers:                 inputSensorParams.ShouldWritePeers,
+			FlushInterval:                    inputSensorParams.ClickHouseFlushInterval,
 		}), nil
 	case "json":
 		return database.NewJSONDatabase(database.JSONDatabaseOptions{
@@ -581,6 +586,9 @@ func init() {
 	f.StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "datastore database ID")
 	f.StringVar(&inputSensorParams.ClickHouseDSN, "clickhouse-dsn", "",
 		"ClickHouse DSN, e.g. clickhouse://user:pass@host:9000/sensor (used with --database=clickhouse)")
+	f.DurationVar(&inputSensorParams.ClickHouseFlushInterval, "clickhouse-flush-interval", database.DefaultClickHouseFlushInterval,
+		`how often to flush partially filled ClickHouse batches; lower values make rows
+visible sooner but create more parts for ClickHouse to merge`)
 	f.StringVarP(&inputSensorParams.SensorID, "sensor-id", "s", "", "sensor ID when writing block/tx events")
 	flag.MarkFlagsRequired(SensorCmd, "sensor-id")
 	f.IntVarP(&inputSensorParams.MaxPeers, "max-peers", "m", 2000, "maximum number of peers to connect to")
