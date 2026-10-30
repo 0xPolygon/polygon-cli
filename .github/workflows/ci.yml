@@ -165,7 +165,9 @@ jobs:
 
   loadtest:
     name: Run loadtest
-    runs-on: ubuntu-latest
+    # TODO: ubuntu-latest is 26.04 (resolute) which the ethereum PPA has no
+    # packages for; pin to 24.04 until the PPA catches up.
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         tool: [geth, anvil]
