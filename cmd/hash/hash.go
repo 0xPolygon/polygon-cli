@@ -5,6 +5,7 @@ import (
 	stdsha3 "crypto/sha3"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -27,7 +28,6 @@ import (
 	"golang.org/x/crypto/ripemd160" //nolint:staticcheck
 	"golang.org/x/crypto/sha3"
 
-	"github.com/gateway-fm/vectorized-poseidon-gold/src/vectorizedposeidongold"
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/rs/zerolog/log"
 )
@@ -145,6 +145,9 @@ func getHash(name string) (hash.Hash, error) {
 	case "poseidon":
 		return poseidon.New(16)
 	case "poseidongold":
+		if !poseidongoldAvailable {
+			return nil, errPoseidongoldUnavailable
+		}
 		pg := new(poseidongoldWrapper)
 		return pg, nil
 	}
@@ -169,6 +172,10 @@ func getInputData(cmd *cobra.Command, args []string) ([]byte, error) {
 
 	return io.ReadAll(os.Stdin)
 }
+
+// errPoseidongoldUnavailable is returned when poseidongold is requested from a
+// binary built without CGO.
+var errPoseidongoldUnavailable = errors.New("poseidongold requires a binary built with CGO enabled")
 
 type poseidongoldWrapper struct {
 	b *bytes.Buffer
@@ -199,7 +206,7 @@ func (p *poseidongoldWrapper) Sum(b []byte) []byte {
 			panic("What?? that shouldn't have happened")
 		}
 		hashInput, _ := bytesToUints(buf)
-		cap, err = vectorizedposeidongold.Hash(hashInput, cap)
+		cap, err = poseidongoldHash(hashInput, cap)
 		if err != nil {
 			log.Error().Err(err).Msg("Unable to hash input")
 			// Exit since we don't want to return a known bad hash value here
