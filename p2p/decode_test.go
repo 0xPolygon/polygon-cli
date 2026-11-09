@@ -73,13 +73,19 @@ func TestBuildBlockBodyRejectsUndecodableTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
+	// A legacy transaction is a bare RLP list in a body. go-ethereum rejects one
+	// wrapped in an RLP string, so the body decoder must too.
+	encGood, err := rlp.EncodeToBytes(good)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
 	goodRLP, err := good.MarshalBinary()
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	encGood, err := rlp.EncodeToBytes(goodRLP)
+	wrappedLegacy, err := rlp.EncodeToBytes(goodRLP)
 	if err != nil {
-		t.Fatalf("encode: %v", err)
+		t.Fatalf("encode wrapped: %v", err)
 	}
 
 	// A body whose first transaction is fine and whose second is garbage.
@@ -96,6 +102,15 @@ func TestBuildBlockBodyRejectsUndecodableTx(t *testing.T) {
 
 	if _, _, buildErr := c.buildBlockBody(raw); buildErr == nil {
 		t.Fatal("accepted a body with an undecodable transaction; the tx_index mapping would be silently shifted")
+	}
+
+	body.Transactions = []rlp.RawValue{wrappedLegacy}
+	raw, err = rlp.EncodeToBytes(&body)
+	if err != nil {
+		t.Fatalf("encode body: %v", err)
+	}
+	if _, _, buildErr := c.buildBlockBody(raw); buildErr == nil {
+		t.Fatal("accepted a legacy transaction wrapped in an RLP string")
 	}
 
 	// The all-good case must still work, or the guard is useless.

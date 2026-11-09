@@ -493,10 +493,15 @@ func getBlockByNumber(req rpcRequest, conns *p2p.Conns) (any, *rpcError) {
 		hash = head.Block.Hash()
 		cache, found = conns.Blocks().Get(hash)
 		if !found {
-			// Construct cache from head block. A types.Block cannot hold Bor
-			// state-sync transactions, so a head block that has one and is not
-			// cached is served without it; cached blocks keep the whole body.
+			// Construct cache from head block. Its transactions come from the
+			// decoded body when there is one, since a types.Block cannot hold Bor
+			// state-sync transactions.
 			txList, _ := rlp.EncodeToRawList([]*types.Transaction(head.Block.Transactions()))
+			if head.Txs != nil {
+				if list, err := head.Txs.RawList(); err == nil {
+					txList = list
+				}
+			}
 			uncleList, _ := rlp.EncodeToRawList(head.Block.Uncles())
 			cache = p2p.BlockCache{
 				Header: head.Block.Header(),

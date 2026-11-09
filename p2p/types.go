@@ -131,6 +131,9 @@ func (NewBlockHashesPacket) Name() string { return "NewBlockHashes" }
 type NewBlockPacket struct {
 	Block *types.Block
 	TD    *big.Int
+	// Txs is the block's decoded body, Bor state-sync transactions included,
+	// which Block cannot hold. It is not part of the message.
+	Txs *bortx.Body `rlp:"-"`
 }
 
 func (*NewBlockPacket) Name() string { return "NewBlock" }
@@ -325,12 +328,11 @@ func decodeNewBlock(rawData []byte) Message {
 	if err != nil {
 		return errorf("could not decode new block transactions: %v", err)
 	}
-	block := types.NewBlockWithHeader(raw.Block.Header).WithBody(types.Body{
-		Transactions: txs.Txs,
-		Uncles:       raw.Block.Uncles,
-		Withdrawals:  raw.Block.Withdrawals,
-	})
-	return &NewBlock{Block: block, TD: raw.TD}
+	block, err := blockFromRaw(raw.Block, txs)
+	if err != nil {
+		return errorf("could not verify new block: %v", err)
+	}
+	return &NewBlock{Block: block, TD: raw.TD, Txs: txs}
 }
 
 // Write writes a eth packet to the connection.

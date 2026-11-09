@@ -24,6 +24,10 @@ type BlockCache struct {
 	Header *types.Header
 	Body   *eth.BlockBody
 	TD     *big.Int
+	// TxRoot is the transaction root of Body, set with it, so a body cached
+	// before its header can be checked against the header when it arrives
+	// without decoding the body again.
+	TxRoot common.Hash
 }
 
 // ConnsOptions contains configuration options for creating a new Conns manager.

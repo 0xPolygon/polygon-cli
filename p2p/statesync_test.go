@@ -118,6 +118,9 @@ func TestHandleNewBlockKeepsStateSyncTx(t *testing.T) {
 	if !ok || cache.Body == nil {
 		t.Fatal("block with a state-sync transaction was not cached")
 	}
+	if head := conns.HeadBlock(); head.Block.Hash() == hash && (head.Txs == nil || len(head.Txs.Hashes) != len(block.Txs)) {
+		t.Fatal("head block does not carry the whole decoded body")
+	}
 	cached, err := bortx.DecodeList(&cache.Body.Transactions)
 	if err != nil {
 		t.Fatalf("DecodeList cached body: %v", err)
@@ -162,10 +165,9 @@ func blockBodiesMsg(t *testing.T, reqID uint64, txs []rlp.RawValue, uncles []*ty
 	})
 }
 
-// TestHandleBlockBodiesChecksRootAgainstCachedHeader is the regression test for a
-// body with an extra state-sync item appended. That item needs no signature, so
-// without a txRoot check it would be stored under the real block hash with a
-// transaction count one too high.
+// TestHandleBlockBodiesChecksRootAgainstCachedHeader checks that a body which
+// does not match its already-cached header is neither stored nor cached, while
+// the real body is.
 func TestHandleBlockBodiesChecksRootAgainstCachedHeader(t *testing.T) {
 	block := loadStateSyncBlock(t)
 	hash := block.Header.Hash()
@@ -176,17 +178,14 @@ func TestHandleBlockBodiesChecksRootAgainstCachedHeader(t *testing.T) {
 		return BlockCache{Header: block.Header}
 	})
 
-	forged, err := rlp.EncodeToBytes(append([]byte{bortx.StateSyncTxType}, 0xc0))
-	if err != nil {
-		t.Fatal(err)
-	}
 	ann := database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()}
 
 	c := newTestConn(&recordRW{}, conns)
 	db := &blockWriteDB{Database: database.NoDatabase()}
 	c.db = db
 	c.requests.Add(1, ann)
-	tampered := append(append([]rlp.RawValue{}, block.Txs...), forged)
+	// Well formed, but missing a transaction, so its root does not match.
+	tampered := append([]rlp.RawValue{}, block.Txs[1:]...)
 	if err := c.handleBlockBodies(context.Background(), blockBodiesMsg(t, 1, tampered, block.Uncles)); err != nil {
 		t.Fatalf("handleBlockBodies: %v", err)
 	}
@@ -231,5 +230,34 @@ func TestNewBlockFromBodyMatchesNetworkEncoding(t *testing.T) {
 	}
 	if !bytes.Equal(got, want) {
 		t.Fatal("NewBlock rebuilt from the cached body differs from the network encoding")
+	}
+}
+
+// TestBodyBeforeHeaderIsCheckedWhenHeaderArrives covers a body that arrives
+// before its header: it cannot be checked then, so it must be checked, and
+// dropped if it does not match, when the header is cached.
+func TestBodyBeforeHeaderIsCheckedWhenHeaderArrives(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	hash := block.Header.Hash()
+	conns := sharedTestConns(t, false)
+	conns.Blocks().Remove(hash)
+
+	c := newTestConn(&recordRW{}, conns)
+	c.requests.Add(3, database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()})
+	tampered := append([]rlp.RawValue{}, block.Txs[1:]...)
+	if err := c.handleBlockBodies(context.Background(), blockBodiesMsg(t, 3, tampered, block.Uncles)); err != nil {
+		t.Fatalf("handleBlockBodies: %v", err)
+	}
+	if cache, _ := conns.Blocks().Peek(hash); cache.Body == nil {
+		t.Fatal("body arriving before its header was not held provisionally")
+	}
+
+	c.cacheAndAnnounceHeader(block.Header, false, false)
+	cache, ok := conns.Blocks().Peek(hash)
+	if !ok || cache.Header == nil {
+		t.Fatal("header was not cached")
+	}
+	if cache.Body != nil {
+		t.Fatal("kept a provisional body that does not match the header that arrived")
 	}
 }

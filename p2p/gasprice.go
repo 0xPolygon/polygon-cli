@@ -87,11 +87,11 @@ func (o *GasPriceOracle) suggestLegacyGasPrice() *big.Int {
 			continue
 		}
 
-		body, err := bortx.DecodeList(&cache.Body.Transactions)
+		txs, err := bortx.DecodeTxs(&cache.Body.Transactions)
 		if err != nil {
 			continue
 		}
-		for _, tx := range body.Txs {
+		for _, tx := range txs {
 			if price := tx.GasPrice(); price != nil && price.Sign() > 0 {
 				prices = append(prices, new(big.Int).Set(price))
 			}
@@ -195,12 +195,12 @@ func (o *GasPriceOracle) getBlockTips(hash common.Hash, limit int, ignoreUnder *
 	}
 
 	// Calculate tips for all transactions
-	body, err := bortx.DecodeList(&cache.Body.Transactions)
+	txs, err := bortx.DecodeTxs(&cache.Body.Transactions)
 	if err != nil {
 		return nil
 	}
 	var allTips []*big.Int
-	for _, tx := range body.Txs {
+	for _, tx := range txs {
 		tip := effectiveGasTip(tx, baseFee)
 		if tip != nil && tip.Sign() > 0 {
 			allTips = append(allTips, tip)

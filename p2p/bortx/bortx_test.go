@@ -127,6 +127,7 @@ func TestIsStateSync(t *testing.T) {
 		{"empty", nil, false},
 		{"wrong type", append([]byte{0x02}, valid...), false},
 		{"malformed payload", []byte{StateSyncTxType, 0xc5, 0x01}, false},
+		{"no events", []byte{StateSyncTxType, 0xc0}, false},
 	}
 	for _, tc := range cases {
 		if got := IsStateSync(tc.binary); got != tc.want {
@@ -171,5 +172,46 @@ func TestDecodeErrorDescribesTheFailingTx(t *testing.T) {
 	}
 	if decodeErr.Hash != crypto.Keccak256Hash(binary) {
 		t.Fatalf("DecodeError hash = %s, want %s", decodeErr.Hash.Hex(), crypto.Keccak256Hash(binary).Hex())
+	}
+}
+
+func TestDecodeRejectsMisplacedOrEmptyStateSync(t *testing.T) {
+	block := loadFixture(t)
+	stateSync := block.Txs[fixtureTxCount-1]
+
+	moved := append([]rlp.RawValue{stateSync}, block.Txs[:fixtureTxCount-1]...)
+	if _, err := Decode(moved); !errors.Is(err, errStateSyncNotLast) {
+		t.Fatalf("state-sync first: err = %v, want errStateSyncNotLast", err)
+	}
+
+	twice := append(append([]rlp.RawValue{}, block.Txs...), stateSync)
+	if _, err := Decode(twice); !errors.Is(err, errStateSyncNotLast) {
+		t.Fatalf("two state-sync: err = %v, want errStateSyncNotLast", err)
+	}
+
+	empty, err := rlp.EncodeToBytes([]byte{StateSyncTxType, 0xc0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withEmpty := append(append([]rlp.RawValue{}, block.Txs[:fixtureTxCount-1]...), empty)
+	if _, err := Decode(withEmpty); err == nil {
+		t.Fatal("accepted a state-sync transaction with no events")
+	}
+}
+
+func TestDecodeTxsSkipsStateSync(t *testing.T) {
+	block := loadFixture(t)
+	var list rlp.RawList[*types.Transaction]
+	for _, item := range block.Txs {
+		if err := list.AppendRaw(item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	txs, err := DecodeTxs(&list)
+	if err != nil {
+		t.Fatalf("DecodeTxs: %v", err)
+	}
+	if len(txs) != fixtureTxCount-1 {
+		t.Fatalf("DecodeTxs = %d transactions, want %d", len(txs), fixtureTxCount-1)
 	}
 }

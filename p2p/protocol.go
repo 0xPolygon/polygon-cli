@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -1125,6 +1126,13 @@ func (c *conn) cacheAndAnnounceHeader(header *types.Header, isParent, announce b
 
 	if c.conns.ShouldCachePayload(known) {
 		c.conns.Blocks().Update(header.Hash(), func(cache BlockCache) BlockCache {
+			// A body cached before this header was not checked against it; drop it
+			// if it does not match, so it is never served or completed as the head.
+			if cache.Body != nil && cache.TxRoot != header.TxHash {
+				c.logBodyRootMismatch(header.Hash(), header.TxHash, cache.TxRoot)
+				cache.Body = nil
+				cache.TxRoot = common.Hash{}
+			}
 			cache.Header = header
 			return cache
 		})
@@ -1216,7 +1224,8 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	c.requests.Remove(packet.RequestId)
 
 	// Check if we already have the body in the cache
-	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.Body != nil {
+	cached, inCache := c.conns.Blocks().Peek(hash)
+	if inCache && cached.Body != nil {
 		return nil
 	}
 
@@ -1227,19 +1236,13 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	// When the header is already held, the body is checked against its txRoot
-	// like a NewBlock is. A Bor state-sync item needs no signature, so without
-	// this a peer could append one to a real body and have it stored under the
-	// real block hash. Without a cached header the body is taken as before.
-	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.Header != nil {
-		if root := txs.Root(); root != cache.Header.TxHash {
-			c.logger.Warn().
-				Str("hash", hash.Hex()).
-				Str("want_tx_root", cache.Header.TxHash.Hex()).
-				Str("got_tx_root", root.Hex()).
-				Int("txs", len(txs.Hashes)).
-				Msg("Dropping block body that does not match its header")
-			return nil
-		}
+	// like a NewBlock is, before it is written. A body that arrives first is
+	// checked when its header does (cacheAndAnnounceHeader), and again below in
+	// the same update that attaches it, in case the header lands in between.
+	root := txs.Root()
+	if inCache && cached.Header != nil && root != cached.Header.TxHash {
+		c.logBodyRootMismatch(hash, cached.Header.TxHash, root)
+		return nil
 	}
 
 	c.db.WriteBlockBody(ctx, body, txs, ann, tfs)
@@ -1261,33 +1264,60 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	var header *types.Header
 	if retainBody {
 		c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+			if cache.Header != nil && cache.Header.TxHash != root {
+				c.logBodyRootMismatch(hash, cache.Header.TxHash, root)
+				return cache
+			}
 			cache.Body = body
+			cache.TxRoot = root
 			header = cache.Header
 			return cache
 		})
 	}
 
 	if header != nil {
-		// Bor state-sync transactions cannot be held by a types.Block and are
-		// left out; this block only tracks the head.
-		blockTxs := txs.Txs
 		blockUncles, _ := body.Uncles.Items()
 		var blockWithdrawals []*types.Withdrawal
 		if body.Withdrawals != nil {
 			blockWithdrawals, _ = body.Withdrawals.Items()
 		}
-		block := types.NewBlockWithHeader(header).WithBody(types.Body{
-			Transactions: blockTxs,
-			Uncles:       blockUncles,
-			Withdrawals:  blockWithdrawals,
-		})
 		c.conns.UpdateHeadBlock(NewBlockPacket{
-			Block: block,
+			Block: assembleBlock(header, txs, blockUncles, blockWithdrawals),
 			TD:    c.conns.HeadBlock().TD,
+			Txs:   txs,
 		})
 	}
 
 	return nil
+}
+
+// assembleBlock builds the types.Block for a header and decoded body. Bor
+// state-sync transactions cannot be held by a types.Block and are left out;
+// whatever needs the whole body is given txs or the raw body instead.
+func assembleBlock(header *types.Header, txs *bortx.Body, uncles []*types.Header, withdrawals []*types.Withdrawal) *types.Block {
+	return types.NewBlockWithHeader(header).WithBody(types.Body{
+		Transactions: txs.Txs,
+		Uncles:       uncles,
+		Withdrawals:  withdrawals,
+	})
+}
+
+// blockFromRaw builds the types.Block for a decoded NewBlock, after checking its
+// transactions against the header's txRoot, which the block hash commits to.
+func blockFromRaw(raw rawBlock, txs *bortx.Body) (*types.Block, error) {
+	if root := txs.Root(); root != raw.Header.TxHash {
+		return nil, fmt.Errorf("transaction root %s does not match header %s", root.Hex(), raw.Header.TxHash.Hex())
+	}
+	return assembleBlock(raw.Header, txs, raw.Uncles, raw.Withdrawals), nil
+}
+
+// logBodyRootMismatch logs a block body dropped for not matching its header.
+func (c *conn) logBodyRootMismatch(hash, want, got common.Hash) {
+	c.logger.Warn().
+		Str("hash", hash.Hex()).
+		Str("want_tx_root", want.Hex()).
+		Str("got_tx_root", got.Hex()).
+		Msg("Dropping block body that does not match its header")
 }
 
 // buildBlockBody decodes a raw RLP block body and re-encodes it into an
@@ -1342,25 +1372,21 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		c.logger.Warn().Err(err).Msg("Dropping new block with undecodable transactions")
 		return nil
 	}
-	block := types.NewBlockWithHeader(raw.Block.Header).WithBody(types.Body{
-		Transactions: txs.Txs,
-		Uncles:       raw.Block.Uncles,
-		Withdrawals:  raw.Block.Withdrawals,
-	})
-	if root := txs.Root(); root != raw.Block.Header.TxHash {
+	block, err := blockFromRaw(raw.Block, txs)
+	if err != nil {
 		c.logger.Warn().
-			Str("hash", block.Hash().Hex()).
-			Str("want_tx_root", raw.Block.Header.TxHash.Hex()).
-			Str("got_tx_root", root.Hex()).
+			Err(err).
+			Str("hash", raw.Block.Header.Hash().Hex()).
 			Int("txs", len(txs.Hashes)).
 			Msg("Dropping new block whose body does not match its header")
 		return nil
 	}
-	body, err := newRawBlockBody(txs, raw.Block.Uncles, raw.Block.Withdrawals)
-	if err != nil {
-		return fmt.Errorf("failed to encode block body: %w", err)
-	}
-	packet := &NewBlockPacket{Block: block, TD: raw.TD}
+	// The raw body is only needed to cache or rebroadcast the block, so it is
+	// built at most once, and only if one of those happens.
+	body := sync.OnceValues(func() (*eth.BlockBody, error) {
+		return newRawBlockBody(txs, raw.Block.Uncles, raw.Block.Withdrawals)
+	})
+	packet := &NewBlockPacket{Block: block, TD: raw.TD, Txs: txs}
 
 	tfs := time.Now()
 	hash := packet.Block.Hash()
@@ -1427,7 +1453,16 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 
 	// Broadcast block or block hash to other peers asynchronously. The full block
 	// is sent from the raw body, so Bor state-sync transactions go out intact.
-	go c.conns.BroadcastBlock(packet.Block, body, packet.TD)
+	if c.conns.shouldBroadcastBlocks {
+		go func() {
+			blockBody, encodeErr := body()
+			if encodeErr != nil {
+				c.logger.Warn().Err(encodeErr).Str("hash", hash.Hex()).Msg("Failed to encode block body for broadcast")
+				return
+			}
+			c.conns.BroadcastBlock(packet.Block, blockBody, packet.TD)
+		}()
+	}
 	go c.conns.BroadcastBlockHashes(
 		[]common.Hash{hash},
 		[]uint64{packet.Block.Number().Uint64()},
@@ -1441,9 +1476,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 // block was already fully cached (by a concurrent peer), so the caller can stop
 // early. Unknown-signer blocks are skipped here and recorded to the database by
 // the caller instead.
-func (c *conn) cacheFullBlock(ctx context.Context, packet *NewBlockPacket, blockBody *eth.BlockBody, hash common.Hash, known bool, tfs time.Time) (cached bool, err error) {
+func (c *conn) cacheFullBlock(ctx context.Context, packet *NewBlockPacket, body func() (*eth.BlockBody, error), hash common.Hash, known bool, tfs time.Time) (cached bool, err error) {
 	if !c.conns.ShouldCachePayload(known) {
 		return false, nil
+	}
+	blockBody, err := body()
+	if err != nil {
+		return false, fmt.Errorf("failed to encode block body: %w", err)
 	}
 
 	// Atomically check and add to cache to prevent duplicate writes from
@@ -1457,6 +1496,7 @@ func (c *conn) cacheFullBlock(ctx context.Context, packet *NewBlockPacket, block
 			Header: packet.Block.Header(),
 			Body:   blockBody,
 			TD:     packet.TD,
+			TxRoot: packet.Block.TxHash(),
 		}
 	})
 	if cached {
