@@ -1,13 +1,14 @@
 package p2p
 
 import (
-	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"math/big"
 	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 )
 
 // Gas price oracle constants (matching Bor/geth defaults)

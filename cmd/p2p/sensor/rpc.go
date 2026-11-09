@@ -554,9 +554,9 @@ func getTransactionByHash(req rpcRequest, conns *p2p.Conns) (any, *rpcError) {
 		if err != nil {
 			continue
 		}
-		for i, tx := range body.Txs {
-			if tx.Hash() == hash {
-				return formatTransactionResponse(tx, blockHash, cache.Header, uint64(i)), nil
+		for i, txHash := range body.Hashes {
+			if txHash == hash {
+				return formatBodyTxResponse(body, i, blockHash, cache.Header), nil
 			}
 		}
 	}
@@ -591,15 +591,12 @@ func getTransactionByBlockHashAndIndex(req rpcRequest, conns *p2p.Conns) (any, *
 		return nil, nil
 	}
 
-	// Bor appends its state-sync transaction last, so the decodable transactions
-	// keep their body indexes; the state-sync one has no go-ethereum form to return.
 	body, err := bortx.DecodeList(&cache.Body.Transactions)
-	if err != nil || int(index) >= len(body.Txs) {
+	if err != nil || index >= uint64(len(body.Hashes)) {
 		return nil, nil
 	}
 
-	tx := body.Txs[index]
-	return formatTransactionResponse(tx, blockHash, cache.Header, index), nil
+	return formatBodyTxResponse(body, int(index), blockHash, cache.Header), nil
 }
 
 // getBlockCacheByHashParam parses a block hash from params[0] and returns the block cache.
@@ -696,17 +693,15 @@ func formatBlockResponse(hash common.Hash, cache p2p.BlockCache, fullTx bool) ma
 	}
 
 	// Add transactions
-	if cache.Body != nil && cache.Body.Transactions.Len() > 0 {
-		var body *bortx.Body
-		if decoded, err := bortx.DecodeList(&cache.Body.Transactions); err == nil {
-			body = decoded
-		} else {
-			body = &bortx.Body{}
-		}
+	body, err := decodeCachedBody(cache)
+	if err != nil {
+		log.Warn().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode cached block body")
+	}
+	if body != nil && len(body.Hashes) > 0 {
 		if fullTx {
-			txResults := make([]map[string]any, len(body.Txs))
-			for i, tx := range body.Txs {
-				txResults[i] = formatTransactionResponse(tx, hash, header, uint64(i))
+			txResults := make([]map[string]any, len(body.Hashes))
+			for i := range body.Hashes {
+				txResults[i] = formatBodyTxResponse(body, i, hash, header)
 			}
 			result["transactions"] = txResults
 		} else {
@@ -740,6 +735,54 @@ func formatBlockResponse(hash common.Hash, cache p2p.BlockCache, fullTx bool) ma
 
 // formatTransactionResponse formats a transaction into the Ethereum JSON-RPC format.
 // If blockHash is empty, the transaction is considered pending.
+// decodeCachedBody decodes the transactions of a cached block body, or returns
+// nil if the block has no body yet.
+func decodeCachedBody(cache p2p.BlockCache) (*bortx.Body, error) {
+	if cache.Body == nil {
+		return nil, nil
+	}
+	return bortx.DecodeList(&cache.Body.Transactions)
+}
+
+// formatBodyTxResponse formats the transaction at body index i. A Bor state-sync
+// transaction has no go-ethereum form, so it is returned the way Bor's own RPC
+// returns one: type 0x7f with zero sender, recipient, gas, value and signature.
+// Every index is answerable, so the hash list, the transaction count and the
+// per-transaction lookups agree.
+func formatBodyTxResponse(body *bortx.Body, i int, blockHash common.Hash, header *types.Header) map[string]any {
+	if tx := body.Tx(i); tx != nil {
+		return formatTransactionResponse(tx, blockHash, header, uint64(i))
+	}
+
+	zero := hexutil.EncodeUint64(0)
+	result := map[string]any{
+		"hash":                 body.Hashes[i].Hex(),
+		"type":                 hexutil.EncodeUint64(bortx.StateSyncTxType),
+		"from":                 common.Address{}.Hex(),
+		"to":                   common.Address{}.Hex(),
+		"nonce":                zero,
+		"gas":                  zero,
+		"gasPrice":             zero,
+		"maxFeePerGas":         zero,
+		"maxPriorityFeePerGas": zero,
+		"value":                zero,
+		"input":                "0x",
+		"v":                    zero,
+		"r":                    zero,
+		"s":                    zero,
+		"yParity":              zero,
+		"blockHash":            nil,
+		"blockNumber":          nil,
+		"transactionIndex":     nil,
+	}
+	if header != nil {
+		result["blockHash"] = blockHash.Hex()
+		result["blockNumber"] = hexutil.EncodeUint64(header.Number.Uint64())
+		result["transactionIndex"] = hexutil.EncodeUint64(uint64(i))
+	}
+	return result
+}
+
 func formatTransactionResponse(tx *types.Transaction, blockHash common.Hash, header *types.Header, index uint64) map[string]any {
 	v, r, s := tx.RawSignatureValues()
 

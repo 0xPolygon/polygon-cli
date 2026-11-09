@@ -7,13 +7,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"math/big"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -519,6 +519,9 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	}
 	if c.shouldWriteBlocks {
 		c.addBlock(block.Header())
+	}
+	if !c.shouldWriteBlocks && !c.shouldWriteTransactions {
+		return
 	}
 	// The body was decoded and checked against the header's txRoot before it got
 	// here, so this cannot fail on a block from the NewBlock path; if it somehow

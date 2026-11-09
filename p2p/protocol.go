@@ -929,6 +929,15 @@ func (c *conn) decodeTxsStrict(rawTxs []rlp.RawValue) (*bortx.Body, error) {
 	body, err := bortx.Decode(rawTxs)
 	if err != nil {
 		c.countTxDecodeError()
+		var decodeErr *bortx.DecodeError
+		if errors.As(err, &decodeErr) {
+			c.logger.Warn().
+				Err(decodeErr.Err).
+				Int("type", decodeErr.Type).
+				Int("size", decodeErr.Size).
+				Str("hash", decodeErr.Hash.Hex()).
+				Msg("Failed to decode transaction")
+		}
 		return nil, err
 	}
 	return body, nil

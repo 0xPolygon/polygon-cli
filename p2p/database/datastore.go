@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"math/big"
 	"time"
 
@@ -15,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/api/iterator"
+
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 )
 
 const (

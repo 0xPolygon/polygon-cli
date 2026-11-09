@@ -42,7 +42,51 @@ type Body struct {
 	// transactions included, so len(Hashes) is the body's transaction count.
 	Hashes []common.Hash
 
+	byIndex  []*types.Transaction
 	binaries [][]byte
+}
+
+// Tx returns the transaction at body index i, or nil if it is a Bor state-sync
+// transaction, which has no go-ethereum form.
+func (b *Body) Tx(i int) *types.Transaction {
+	return b.byIndex[i]
+}
+
+// DecodeError reports the body transaction that failed to decode.
+type DecodeError struct {
+	Index int
+	Count int
+	// Type is the transaction type byte, or -1 if the item is not a typed
+	// transaction.
+	Type int
+	Size int
+	Hash common.Hash
+	Err  error
+}
+
+func (e *DecodeError) Error() string {
+	return fmt.Sprintf("transaction %d of %d failed to decode: %v", e.Index, e.Count, e.Err)
+}
+
+func (e *DecodeError) Unwrap() error { return e.Err }
+
+func newDecodeError(index, count int, item []byte, err error) *DecodeError {
+	encoded := item
+	if binary, berr := Binary(item); berr == nil {
+		encoded = binary
+	}
+	txType := -1
+	if len(encoded) > 0 && encoded[0] <= StateSyncTxType {
+		txType = int(encoded[0])
+	}
+	return &DecodeError{
+		Index: index,
+		Count: count,
+		Type:  txType,
+		Size:  len(encoded),
+		Hash:  crypto.Keccak256Hash(encoded),
+		Err:   err,
+	}
 }
 
 // StateSyncCount returns how many of the body's transactions are Bor state-sync
@@ -125,14 +169,10 @@ func IsStateSync(binary []byte) bool {
 // transaction, because a body missing a transaction is not the body its block
 // hash commits to.
 func Decode(items []rlp.RawValue) (*Body, error) {
-	body := &Body{
-		Txs:      make([]*types.Transaction, 0, len(items)),
-		Hashes:   make([]common.Hash, 0, len(items)),
-		binaries: make([][]byte, 0, len(items)),
-	}
+	body := newBody(len(items))
 	for i, item := range items {
 		if err := body.add(item); err != nil {
-			return nil, fmt.Errorf("transaction %d of %d failed to decode: %w", i, len(items), err)
+			return nil, newDecodeError(i, len(items), item, err)
 		}
 	}
 	return body, nil
@@ -141,21 +181,26 @@ func Decode(items []rlp.RawValue) (*Body, error) {
 // DecodeList decodes the transactions of a block body held as a raw list, the
 // form eth.BlockBody carries them in.
 func DecodeList(list *rlp.RawList[*types.Transaction]) (*Body, error) {
-	body := &Body{
-		Txs:      make([]*types.Transaction, 0, list.Len()),
-		Hashes:   make([]common.Hash, 0, list.Len()),
-		binaries: make([][]byte, 0, list.Len()),
-	}
+	body := newBody(list.Len())
 	it := list.ContentIterator()
 	for i := 0; it.Next(); i++ {
 		if err := body.add(it.Value()); err != nil {
-			return nil, fmt.Errorf("transaction %d of %d failed to decode: %w", i, list.Len(), err)
+			return nil, newDecodeError(i, list.Len(), it.Value(), err)
 		}
 	}
 	if err := it.Err(); err != nil {
 		return nil, err
 	}
 	return body, nil
+}
+
+func newBody(n int) *Body {
+	return &Body{
+		Txs:      make([]*types.Transaction, 0, n),
+		Hashes:   make([]common.Hash, 0, n),
+		byIndex:  make([]*types.Transaction, 0, n),
+		binaries: make([][]byte, 0, n),
+	}
 }
 
 func (b *Body) add(item []byte) error {
@@ -165,6 +210,7 @@ func (b *Body) add(item []byte) error {
 	}
 	if IsStateSync(binary) {
 		b.Hashes = append(b.Hashes, crypto.Keccak256Hash(binary))
+		b.byIndex = append(b.byIndex, nil)
 		b.binaries = append(b.binaries, binary)
 		return nil
 	}
@@ -174,6 +220,7 @@ func (b *Body) add(item []byte) error {
 	}
 	b.Txs = append(b.Txs, tx)
 	b.Hashes = append(b.Hashes, tx.Hash())
+	b.byIndex = append(b.byIndex, tx)
 	b.binaries = append(b.binaries, binary)
 	return nil
 }

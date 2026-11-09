@@ -2,12 +2,14 @@ package bortx
 
 import (
 	"encoding/hex"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -130,5 +132,44 @@ func TestIsStateSync(t *testing.T) {
 		if got := IsStateSync(tc.binary); got != tc.want {
 			t.Errorf("%s: IsStateSync = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestTxByBodyIndex(t *testing.T) {
+	block := loadFixture(t)
+	body, err := Decode(block.Txs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tx := body.Tx(fixtureTxCount - 1); tx != nil {
+		t.Fatalf("Tx(%d) = %s, want nil for the state-sync transaction", fixtureTxCount-1, tx.Hash().Hex())
+	}
+	for i := 0; i < fixtureTxCount-1; i++ {
+		if tx := body.Tx(i); tx == nil || tx.Hash() != body.Hashes[i] {
+			t.Fatalf("Tx(%d) does not match body hash %s", i, body.Hashes[i].Hex())
+		}
+	}
+}
+
+func TestDecodeErrorDescribesTheFailingTx(t *testing.T) {
+	block := loadFixture(t)
+	items := append([]rlp.RawValue{}, block.Txs...)
+	binary := []byte{0x7e, 0xc0}
+	bogus, err := rlp.EncodeToBytes(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items[3] = bogus
+
+	_, err = Decode(items)
+	var decodeErr *DecodeError
+	if !errors.As(err, &decodeErr) {
+		t.Fatalf("Decode error %v is not a *DecodeError", err)
+	}
+	if decodeErr.Index != 3 || decodeErr.Count != len(items) || decodeErr.Type != 0x7e || decodeErr.Size != len(binary) {
+		t.Fatalf("DecodeError = %+v, want index 3, type 0x7e, size %d", decodeErr, len(binary))
+	}
+	if decodeErr.Hash != crypto.Keccak256Hash(binary) {
+		t.Fatalf("DecodeError hash = %s, want %s", decodeErr.Hash.Hex(), crypto.Keccak256Hash(binary).Hex())
 	}
 }
