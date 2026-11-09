@@ -22,7 +22,7 @@ func NoDatabase() Database {
 }
 
 // WriteBlock does nothing.
-func (n *nodb) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (n *nodb) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, body *eth.BlockBody, td *big.Int, tfs time.Time) {
 }
 
 // WriteBlockHeaders does nothing.

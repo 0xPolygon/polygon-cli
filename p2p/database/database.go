@@ -40,8 +40,10 @@ type Database interface {
 	// written if ShouldWriteBlocks returns true; the event is written if either
 	// ShouldWriteBlockEvents or ShouldWriteFirstBlockEvent returns true, because
 	// a whole-block delivery is one event per block per sensor and is the only
-	// place a block first seen this way is observed.
-	WriteBlock(context.Context, *enode.Node, *types.Block, *big.Int, time.Time)
+	// place a block first seen this way is observed. The body carries the
+	// block's transactions as received: the *types.Block cannot hold Bor
+	// state-sync transactions, so transaction facts come from the body.
+	WriteBlock(context.Context, *enode.Node, *types.Block, *eth.BlockBody, *big.Int, time.Time)
 
 	// WriteBlockHeaders will write the block headers if ShouldWriteBlocks
 	// returns true.

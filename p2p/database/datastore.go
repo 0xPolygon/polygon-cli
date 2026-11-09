@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"math/big"
 	"time"
 
@@ -190,7 +191,7 @@ func (d *Datastore) recordsBlockEvents() bool {
 }
 
 // WriteBlock writes the block and the block event to datastore.
-func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, body *eth.BlockBody, td *big.Int, tfs time.Time) {
 	if d.client == nil {
 		return
 	}
@@ -203,7 +204,7 @@ func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *typ
 
 	if d.ShouldWriteBlocks() {
 		d.runAsync(func() {
-			d.writeBlock(ctx, block, td, tfs)
+			d.writeBlock(ctx, block, body, td, tfs)
 		})
 	}
 }
@@ -464,7 +465,7 @@ func (d *Datastore) newDatastoreTransaction(tx *types.Transaction, tfs time.Time
 	}
 }
 
-func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.Int, tfs time.Time) {
+func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, body *eth.BlockBody, td *big.Int, tfs time.Time) {
 	key := datastore.NameKey(BlocksKind, block.Hash().Hex(), nil)
 
 	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
@@ -492,15 +493,16 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 			dsBlock.TotalDifficulty = td.String()
 		}
 
-		if dsBlock.Transactions == nil && len(block.Transactions()) > 0 {
-			modified = true
-			if d.shouldWriteTransactions {
-				d.writeTransactions(ctx, block.Transactions(), tfs)
-			}
-
-			dsBlock.Transactions = make([]*datastore.Key, 0, len(block.Transactions()))
-			for _, tx := range block.Transactions() {
-				dsBlock.Transactions = append(dsBlock.Transactions, datastore.NameKey(TransactionsKind, tx.Hash().Hex(), nil))
+		if dsBlock.Transactions == nil && body.Transactions.Len() > 0 {
+			txs, err := bortx.DecodeList(&body.Transactions)
+			if err != nil {
+				log.Error().Err(err).Str("hash", block.Hash().Hex()).Msg("Failed to decode transactions from block body")
+			} else {
+				modified = true
+				if d.shouldWriteTransactions {
+					d.writeTransactions(ctx, txs.Txs, tfs)
+				}
+				dsBlock.Transactions = transactionKeys(txs.Hashes)
 			}
 		}
 
@@ -610,18 +612,15 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 		modified := false
 
 		if block.Transactions == nil && body.Transactions.Len() > 0 {
-			txs, err := body.Transactions.Items()
+			txs, err := bortx.DecodeList(&body.Transactions)
 			if err != nil {
 				log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
 			} else {
 				modified = true
 				if d.shouldWriteTransactions {
-					d.writeTransactions(ctx, txs, tfs)
+					d.writeTransactions(ctx, txs.Txs, tfs)
 				}
-				block.Transactions = make([]*datastore.Key, 0, len(txs))
-				for _, tx := range txs {
-					block.Transactions = append(block.Transactions, datastore.NameKey(TransactionsKind, tx.Hash().Hex(), nil))
-				}
+				block.Transactions = transactionKeys(txs.Hashes)
 			}
 		}
 
@@ -735,4 +734,14 @@ func (d *Datastore) Close() error {
 		d.jobs <- struct{}{}
 	}
 	return d.client.Close()
+}
+
+// transactionKeys returns a key per transaction hash, in body order. The hashes
+// include Bor state-sync transactions, which have no transaction entity.
+func transactionKeys(hashes []common.Hash) []*datastore.Key {
+	keys := make([]*datastore.Key, 0, len(hashes))
+	for _, hash := range hashes {
+		keys = append(keys, datastore.NameKey(TransactionsKind, hash.Hex(), nil))
+	}
+	return keys
 }

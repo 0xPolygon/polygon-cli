@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/0xPolygon/polygon-cli/p2p"
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -547,11 +548,11 @@ func getTransactionByHash(req rpcRequest, conns *p2p.Conns) (any, *rpcError) {
 		if !ok || cache.Body == nil {
 			continue
 		}
-		txs, err := cache.Body.Transactions.Items()
+		body, err := bortx.DecodeList(&cache.Body.Transactions)
 		if err != nil {
 			continue
 		}
-		for i, tx := range txs {
+		for i, tx := range body.Txs {
 			if tx.Hash() == hash {
 				return formatTransactionResponse(tx, blockHash, cache.Header, uint64(i)), nil
 			}
@@ -588,12 +589,14 @@ func getTransactionByBlockHashAndIndex(req rpcRequest, conns *p2p.Conns) (any, *
 		return nil, nil
 	}
 
-	txs, err := cache.Body.Transactions.Items()
-	if err != nil || int(index) >= len(txs) {
+	// Bor appends its state-sync transaction last, so the decodable transactions
+	// keep their body indexes; the state-sync one has no go-ethereum form to return.
+	body, err := bortx.DecodeList(&cache.Body.Transactions)
+	if err != nil || int(index) >= len(body.Txs) {
 		return nil, nil
 	}
 
-	tx := txs[index]
+	tx := body.Txs[index]
 	return formatTransactionResponse(tx, blockHash, cache.Header, index), nil
 }
 
@@ -692,17 +695,22 @@ func formatBlockResponse(hash common.Hash, cache p2p.BlockCache, fullTx bool) ma
 
 	// Add transactions
 	if cache.Body != nil && cache.Body.Transactions.Len() > 0 {
-		txs, _ := cache.Body.Transactions.Items()
+		var body *bortx.Body
+		if decoded, err := bortx.DecodeList(&cache.Body.Transactions); err == nil {
+			body = decoded
+		} else {
+			body = &bortx.Body{}
+		}
 		if fullTx {
-			txResults := make([]map[string]any, len(txs))
-			for i, tx := range txs {
+			txResults := make([]map[string]any, len(body.Txs))
+			for i, tx := range body.Txs {
 				txResults[i] = formatTransactionResponse(tx, hash, header, uint64(i))
 			}
 			result["transactions"] = txResults
 		} else {
-			txHashes := make([]string, len(txs))
-			for i, tx := range txs {
-				txHashes[i] = tx.Hash().Hex()
+			txHashes := make([]string, len(body.Hashes))
+			for i, txHash := range body.Hashes {
+				txHashes[i] = txHash.Hex()
 			}
 			result["transactions"] = txHashes
 		}

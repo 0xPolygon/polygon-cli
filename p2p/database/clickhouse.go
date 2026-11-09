@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"math/big"
 	"strings"
 	"sync"
@@ -475,11 +476,11 @@ func (c *ClickHouse) recordsTxEvents() bool {
 	return c.shouldWriteTransactionEvents || c.shouldWriteFirstTransactionEvent
 }
 
-func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, body *eth.BlockBody, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
 		// blocks + block_bodies + block_total_difficulty + the event, then one
 		// block_txs and one transactions row per transaction.
-		c.discarded.Add(4 + 2*uint64(len(block.Transactions())))
+		c.discarded.Add(4 + 2*uint64(body.Transactions.Len()))
 		return
 	}
 	// Which peer announced which total difficulty is an observation, so it rides on
@@ -518,10 +519,20 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	}
 	if c.shouldWriteBlocks {
 		c.addBlock(block.Header())
-		c.writeBlockBody(block.Hash(), block.Transactions(), block.Uncles(), tfs)
+	}
+	// The body was decoded and checked against the header's txRoot before it got
+	// here, so this cannot fail on a block from the NewBlock path; if it somehow
+	// does, the body facts are skipped rather than written short.
+	txs, err := bortx.DecodeList(&body.Transactions)
+	if err != nil {
+		log.Error().Err(err).Str("hash", block.Hash().Hex()).Msg("Failed to decode transactions from block body")
+		return
+	}
+	if c.shouldWriteBlocks {
+		c.writeBlockBody(block.Hash(), txs.Hashes, block.Uncles(), tfs)
 	}
 	if c.shouldWriteTransactions {
-		c.writeTxs(block.Transactions(), tfs)
+		c.writeTxs(txs.Txs, tfs)
 	}
 }
 
@@ -584,10 +595,11 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, an
 		})
 	}
 
-	txs, err := body.Transactions.Items()
+	txs, err := bortx.DecodeList(&body.Transactions)
 	if err != nil {
 		// Nothing downstream is derivable: block_bodies needs the count, block_txs
-		// and transactions need the transactions themselves.
+		// and transactions need the transactions themselves. Bor state-sync
+		// transactions decode here (see bortx); anything else unknown does not.
 		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
 		return
 	}
@@ -605,13 +617,13 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, an
 	}
 	if c.shouldWriteBlocks {
 		if uncleErr == nil {
-			c.writeBlockBody(hash, txs, uncles, tfs)
+			c.writeBlockBody(hash, txs.Hashes, uncles, tfs)
 		} else {
-			c.writeBlockTxs(hash, txs, tfs)
+			c.writeBlockTxs(hash, txs.Hashes, tfs)
 		}
 	}
 	if c.shouldWriteTransactions {
-		c.writeTxs(txs, tfs)
+		c.writeTxs(txs.Txs, tfs)
 	}
 }
 
@@ -885,31 +897,34 @@ func newChBlock(h *types.Header) chBlock {
 // Deliberately stores no encoded block size: it is only knowable from a full
 // NewBlock, not from a body delivered on its own, so it is not a function of the
 // hash and two sensors could write differing rows for one block.
-func (c *ClickHouse) writeBlockBody(hash common.Hash, txs []*types.Transaction, uncles []*types.Header, tfs time.Time) {
+// writeBlockBody records the body facts. txHashes holds every transaction in body
+// order, Bor state-sync transactions included, so tx_count and every block_txs
+// tx_index match the chain.
+func (c *ClickHouse) writeBlockBody(hash common.Hash, txHashes []common.Hash, uncles []*types.Header, tfs time.Time) {
 	uncleHashes := make([]string, 0, len(uncles))
 	for _, u := range uncles {
 		uncleHashes = append(uncleHashes, u.Hash().Hex())
 	}
 	c.blockBodies.add(chBlockBody{
 		hash:       hash.Hex(),
-		txCount:    uint32(len(txs)),
+		txCount:    uint32(len(txHashes)),
 		uncleCount: uint16(len(uncles)),
 		uncles:     uncleHashes,
 	})
-	c.writeBlockTxs(hash, txs, tfs)
+	c.writeBlockTxs(hash, txHashes, tfs)
 }
 
 // writeBlockTxs records the ordered block -> transaction mapping alone, for the
 // case where the body facts row cannot be written (undecodable uncles) but the
 // transactions decoded fine.
-func (c *ClickHouse) writeBlockTxs(hash common.Hash, txs []*types.Transaction, tfs time.Time) {
+func (c *ClickHouse) writeBlockTxs(hash common.Hash, txHashes []common.Hash, tfs time.Time) {
 	blockHash := hash.Hex()
 	seenDate := tfs.UTC().Truncate(24 * time.Hour)
-	for i, tx := range txs {
+	for i, txHash := range txHashes {
 		c.blockTxs.add(chBlockTx{
 			blockHash: blockHash,
 			txIndex:   uint32(i),
-			txHash:    tx.Hash().Hex(),
+			txHash:    txHash.Hex(),
 			seenDate:  seenDate,
 		})
 	}

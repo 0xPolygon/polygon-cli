@@ -139,9 +139,9 @@ func (j *JSONDatabase) Write(v any) {
 }
 
 // WriteBlock writes the block and the block event as JSON.
-func (j *JSONDatabase) WriteBlock(_ context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (j *JSONDatabase) WriteBlock(_ context.Context, peer *enode.Node, block *types.Block, body *eth.BlockBody, td *big.Int, tfs time.Time) {
 	j.writeBlockEvent(peer, block, tfs)
-	j.writeBlock(block, td, tfs)
+	j.writeBlock(block, body, td, tfs)
 }
 
 func (j *JSONDatabase) writeBlockEvent(peer *enode.Node, block *types.Block, tfs time.Time) {
@@ -160,7 +160,7 @@ func (j *JSONDatabase) writeBlockEvent(peer *enode.Node, block *types.Block, tfs
 	j.Write(event)
 }
 
-func (j *JSONDatabase) writeBlock(block *types.Block, td *big.Int, tfs time.Time) {
+func (j *JSONDatabase) writeBlock(block *types.Block, body *eth.BlockBody, td *big.Int, tfs time.Time) {
 	if !j.ShouldWriteBlocks() {
 		return
 	}
@@ -176,7 +176,7 @@ func (j *JSONDatabase) writeBlock(block *types.Block, td *big.Int, tfs time.Time
 		GasUsed:         block.GasUsed(),
 		Difficulty:      block.Difficulty().String(),
 		TotalDifficulty: td.String(),
-		TxCount:         len(block.Transactions()),
+		TxCount:         body.Transactions.Len(),
 		UncleCount:      len(block.Uncles()),
 		TimeFirstSeen:   tfs,
 	}
