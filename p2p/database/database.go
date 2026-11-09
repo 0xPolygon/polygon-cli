@@ -62,12 +62,19 @@ type Database interface {
 	// treat it as a no-op.
 	WriteBlockHashFirstSeen(context.Context, *enode.Node, common.Hash, time.Time)
 
-	// WriteBlockBody writes the transactions carried in the block body (the block
-	// row itself comes from WriteBlock/WriteBlockHeaders). The announcement carries
-	// the height, which the eth block body does not, so backends that key
-	// observations by block number can record the body's arrival. ClickHouse
-	// writes the body facts if ShouldWriteBlocks and the transactions if
-	// ShouldWriteTransactions.
+	// WriteBlockBodyArrival records that a requested block body arrived, at the
+	// time it arrived. The announcement carries the height, which the eth block
+	// body does not, so backends that key observations by block number can
+	// record it. It is called as soon as the body decodes, separately from
+	// WriteBlockBody, which waits until the body has been checked.
+	WriteBlockBodyArrival(context.Context, BlockAnnouncement, time.Time)
+
+	// WriteBlockBody writes the facts of a block body: its transaction count and
+	// ordered transactions (the block row itself comes from WriteBlock or
+	// WriteBlockHeaders). It is only called with a body checked against its
+	// header's txRoot, so tfs, when the body arrived, may be well before the
+	// call. ClickHouse writes the body facts if ShouldWriteBlocks and the
+	// transactions if ShouldWriteTransactions.
 	WriteBlockBody(context.Context, *eth.BlockBody, *bortx.Body, BlockAnnouncement, time.Time)
 
 	// WriteTransactions writes the transaction bodies if ShouldWriteTransactions

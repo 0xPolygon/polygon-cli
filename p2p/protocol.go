@@ -1094,6 +1094,11 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.db.WriteBlockHeaders(ctx, headers, tfs, isParent)
 
+	// Write any body that arrived before its header, now that it can be checked.
+	for _, header := range headers {
+		c.releasePendingBody(ctx, header)
+	}
+
 	// Cache each header and, for the announced header, perform the deferred
 	// signer-validated hash rebroadcast.
 	var head *types.Header
@@ -1235,17 +1240,28 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	// When the header is already held, the body is checked against its txRoot
-	// like a NewBlock is, before it is written. A body that arrives first is
-	// checked when its header does (cacheAndAnnounceHeader), and again below in
-	// the same update that attaches it, in case the header lands in between.
-	root := txs.Root()
-	if inCache && cached.Header != nil && root != cached.Header.TxHash {
-		c.logBodyRootMismatch(hash, cached.Header.TxHash, root)
-		return nil
-	}
+	c.db.WriteBlockBodyArrival(ctx, ann, tfs)
 
-	c.db.WriteBlockBody(ctx, body, txs, ann, tfs)
+	// The body is written to the database only once it has been checked against
+	// its header's txRoot, as a NewBlock is. If the header has not arrived yet the
+	// body is held, and written (or dropped) when it does: written unchecked, a
+	// body for the right hash with a transaction added or removed would land in
+	// block_bodies and block_txs under the real block hash, where it can win the
+	// merge against honest sensors' rows. The serving cache is checked again
+	// below, in the same update that attaches the body, and when the header is
+	// cached (cacheAndAnnounceHeader).
+	root := txs.Root()
+	if inCache && cached.Header != nil {
+		c.conns.bodies.headerSeen(hash, cached.Header.TxHash)
+	}
+	want, known := c.conns.bodies.bodyArrived(hash, pendingBody{body: body, txs: txs, ann: ann, tfs: tfs, root: root})
+	if known {
+		if root != want {
+			c.logBodyRootMismatch(hash, want, root)
+			return nil
+		}
+		c.db.WriteBlockBody(ctx, body, txs, ann, tfs)
+	}
 
 	// When cache-only-validated is enabled, only retain the body if the block
 	// already has a cache entry (the announcement marker, or a cached header).
@@ -1309,6 +1325,21 @@ func blockFromRaw(raw rawBlock, txs *bortx.Body) (*types.Block, error) {
 		return nil, fmt.Errorf("transaction root %s does not match header %s", root.Hex(), raw.Header.TxHash.Hex())
 	}
 	return assembleBlock(raw.Header, txs, raw.Uncles, raw.Withdrawals), nil
+}
+
+// releasePendingBody records a header's txRoot and writes the body that arrived
+// before it, if there is one and it matches. A body that does not match is
+// dropped unwritten.
+func (c *conn) releasePendingBody(ctx context.Context, header *types.Header) {
+	pending, ok := c.conns.bodies.headerSeen(header.Hash(), header.TxHash)
+	if !ok {
+		return
+	}
+	if pending.root != header.TxHash {
+		c.logBodyRootMismatch(header.Hash(), header.TxHash, pending.root)
+		return
+	}
+	c.db.WriteBlockBody(ctx, pending.body, pending.txs, pending.ann, pending.tfs)
 }
 
 // logBodyRootMismatch logs a block body dropped for not matching its header.
@@ -1390,6 +1421,10 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 
 	tfs := time.Now()
 	hash := packet.Block.Hash()
+
+	// The NewBlock's own body, checked above, is what gets written below, so a
+	// body for the same block still waiting for its header is not needed.
+	c.conns.bodies.headerSeen(hash, packet.Block.TxHash())
 
 	c.countMsgReceived(packet.Name(), 1)
 

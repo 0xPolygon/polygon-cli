@@ -71,6 +71,10 @@ type Conns struct {
 	// to avoid duplicate writes and requests.
 	blocks *ds.LRU[common.Hash, BlockCache]
 
+	// bodies keeps block bodies out of the database until they have been
+	// checked against their header's txRoot.
+	bodies *bodyGate
+
 	// txs caches transactions for serving to peers and duplicate detection
 	txs *ds.LRU[common.Hash, *types.Transaction]
 
@@ -160,6 +164,7 @@ func NewConns(opts ConnsOptions) *Conns {
 	c := &Conns{
 		conns:                      make(map[string]*conn),
 		blocks:                     ds.NewLRU[common.Hash, BlockCache](opts.BlocksCache),
+		bodies:                     newBodyGate(opts.BlocksCache),
 		txs:                        ds.NewLRU[common.Hash, *types.Transaction](opts.TxsCache),
 		announcedTxs:               ds.NewLRU[common.Hash, struct{}](opts.TxsCache),
 		knownTxsBloom:              opts.KnownTxsBloom,

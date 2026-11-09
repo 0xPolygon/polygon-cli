@@ -563,28 +563,36 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	}
 }
 
-func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
+// WriteBlockBodyArrival records the body event. Like the header sources it
+// carries no peer -- the sensor requested the body -- so it is excluded from the
+// propagation rollup, but it makes "which sensor got the body, and when"
+// answerable. It is written on arrival, whether or not the body later checks
+// out against its header, because the arrival is an observation either way.
+func (c *ClickHouse) WriteBlockBodyArrival(ctx context.Context, ann BlockAnnouncement, tfs time.Time) {
 	if c.conn == nil {
 		c.discarded.Add(1)
 		return
 	}
-	hash := ann.Hash
-
-	// The body arrived: that is true whether or not its uncles decode, so the
-	// event is recorded first. Like the header sources it carries no peer -- the
-	// sensor requested it -- so it is excluded from the propagation rollup, but it
-	// makes "which sensor got the body, and when" answerable. The transactions
-	// were decoded before this was called (txs), so the uncle decode below is the
-	// only failure left here.
-	if c.recordsBlockEvents() {
-		c.blockEvt.add(chBlockEvent{
-			blockNumber:     ann.Number,
-			blockHash:       hash.Hex(),
-			source:          srcBody,
-			seenAt:          tfs,
-			totalDifficulty: big.NewInt(0),
-		})
+	if !c.recordsBlockEvents() {
+		return
 	}
+	c.blockEvt.add(chBlockEvent{
+		blockNumber:     ann.Number,
+		blockHash:       ann.Hash.Hex(),
+		source:          srcBody,
+		seenAt:          tfs,
+		totalDifficulty: big.NewInt(0),
+	})
+}
+
+func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
+	if c.conn == nil {
+		// block_bodies, then one block_txs row per transaction and one
+		// transactions row per transaction that is not a Bor state-sync one.
+		c.discarded.Add(1 + uint64(len(txs.Hashes)) + uint64(len(txs.Txs)))
+		return
+	}
+	hash := ann.Hash
 
 	// Each fact is skipped exactly when ITS inputs are undecodable, no wider.
 	// block_bodies carries uncle facts, so a failed uncle decode skips only that

@@ -18,6 +18,7 @@ import (
 
 	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
+	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 )
 
 // stateSyncFixture is mainnet block 97,029,696, whose last transaction (index 48
@@ -44,8 +45,10 @@ func loadStateSyncBlock(t *testing.T) rawBlock {
 // blockWriteDB records the block and transactions passed to WriteBlock.
 type blockWriteDB struct {
 	database.Database
-	block *types.Block
-	txs   *bortx.Body
+	block      *types.Block
+	txs        *bortx.Body
+	bodyWrites int
+	bodyTfs    time.Time
 }
 
 func (d *blockWriteDB) WriteBlock(_ context.Context, _ *enode.Node, block *types.Block, txs *bortx.Body, _ *big.Int, _ time.Time) {
@@ -53,8 +56,10 @@ func (d *blockWriteDB) WriteBlock(_ context.Context, _ *enode.Node, block *types
 	d.txs = txs
 }
 
-func (d *blockWriteDB) WriteBlockBody(_ context.Context, _ *eth.BlockBody, txs *bortx.Body, _ database.BlockAnnouncement, _ time.Time) {
+func (d *blockWriteDB) WriteBlockBody(_ context.Context, _ *eth.BlockBody, txs *bortx.Body, _ database.BlockAnnouncement, tfs time.Time) {
 	d.txs = txs
+	d.bodyWrites++
+	d.bodyTfs = tfs
 }
 
 // TestBuildBlockBodyKeepsStateSyncTx is the regression test for BlockBodies
@@ -240,6 +245,8 @@ func TestBodyBeforeHeaderIsCheckedWhenHeaderArrives(t *testing.T) {
 	block := loadStateSyncBlock(t)
 	hash := block.Header.Hash()
 	conns := sharedTestConns(t, false)
+	// The test Conns is shared; start with neither header nor body seen.
+	conns.bodies = newBodyGate(ds.LRUOptions{MaxSize: 64})
 	conns.Blocks().Remove(hash)
 
 	c := newTestConn(&recordRW{}, conns)
@@ -259,5 +266,96 @@ func TestBodyBeforeHeaderIsCheckedWhenHeaderArrives(t *testing.T) {
 	}
 	if cache.Body != nil {
 		t.Fatal("kept a provisional body that does not match the header that arrived")
+	}
+}
+
+// blockHeadersMsg wraps headers in a BlockHeaders response.
+func blockHeadersMsg(t *testing.T, headers ...*types.Header) ethp2p.Msg {
+	t.Helper()
+	list, err := rlp.EncodeToRawList(headers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encodeMsg(t, eth.BlockHeadersMsg, &eth.BlockHeadersPacket{RequestId: 0, List: list})
+}
+
+// TestBodyIsWrittenOnlyOnceCheckedAgainstHeader is the regression test for a body
+// that arrives before its header being written to the database unchecked. It
+// must be held, then written with its arrival time if the header matches, and
+// never written if it does not.
+func TestBodyIsWrittenOnlyOnceCheckedAgainstHeader(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	hash := block.Header.Hash()
+	ann := database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()}
+	conns := sharedTestConns(t, false)
+
+	cases := []struct {
+		name      string
+		txs       []rlp.RawValue
+		wantWrite bool
+	}{
+		{"matching body", block.Txs, true},
+		{"body missing a transaction", block.Txs[1:], false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// The test Conns is shared; start with neither header nor body seen.
+			conns.bodies = newBodyGate(ds.LRUOptions{MaxSize: 64})
+			conns.Blocks().Remove(hash)
+
+			c := newTestConn(&recordRW{}, conns)
+			db := &blockWriteDB{Database: database.NoDatabase()}
+			c.db = db
+
+			c.requests.Add(7, ann)
+			if err := c.handleBlockBodies(context.Background(), blockBodiesMsg(t, 7, tc.txs, block.Uncles)); err != nil {
+				t.Fatalf("handleBlockBodies: %v", err)
+			}
+			if db.bodyWrites != 0 {
+				t.Fatal("wrote a body before its header arrived")
+			}
+			arrived := time.Now()
+
+			if err := c.handleBlockHeaders(context.Background(), blockHeadersMsg(t, block.Header)); err != nil {
+				t.Fatalf("handleBlockHeaders: %v", err)
+			}
+			if tc.wantWrite {
+				if db.bodyWrites != 1 || len(db.txs.Hashes) != len(block.Txs) {
+					t.Fatalf("body writes = %d, want 1 with %d transactions", db.bodyWrites, len(block.Txs))
+				}
+				if db.bodyTfs.After(arrived) {
+					t.Fatalf("body written with time %v, want its arrival time (before %v)", db.bodyTfs, arrived)
+				}
+				return
+			}
+			if db.bodyWrites != 0 {
+				t.Fatal("wrote a body that does not match its header")
+			}
+		})
+	}
+}
+
+// TestBodyAfterHeaderIsWrittenImmediately covers the usual order: the header is
+// known, so the body is checked and written as it arrives.
+func TestBodyAfterHeaderIsWrittenImmediately(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	hash := block.Header.Hash()
+	conns := sharedTestConns(t, false)
+	conns.bodies = newBodyGate(ds.LRUOptions{MaxSize: 64})
+	conns.Blocks().Remove(hash)
+
+	c := newTestConn(&recordRW{}, conns)
+	db := &blockWriteDB{Database: database.NoDatabase()}
+	c.db = db
+
+	if err := c.handleBlockHeaders(context.Background(), blockHeadersMsg(t, block.Header)); err != nil {
+		t.Fatalf("handleBlockHeaders: %v", err)
+	}
+	c.requests.Add(8, database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()})
+	if err := c.handleBlockBodies(context.Background(), blockBodiesMsg(t, 8, block.Txs, block.Uncles)); err != nil {
+		t.Fatalf("handleBlockBodies: %v", err)
+	}
+	if db.bodyWrites != 1 {
+		t.Fatalf("body writes = %d, want 1", db.bodyWrites)
 	}
 }
