@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -73,13 +74,43 @@ func (m *BlockMetrics) Update(block *types.Block, oldest *types.Header) {
 	m.blockRange.Set(float64(hn - on))
 }
 
-// NewPeersGauge creates and registers the peers gauge metric.
-func NewPeersGauge() prometheus.Gauge {
-	return promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "sensor",
-		Name:      "peers",
-		Help:      "Number of peers the sensor is connected to",
-	})
+// PeerMetrics contains Prometheus metrics for tracking connected peers.
+type PeerMetrics struct {
+	peers            prometheus.Gauge
+	peersByDirection *prometheus.GaugeVec
+}
+
+// NewPeerMetrics creates and registers the peer metrics.
+func NewPeerMetrics() *PeerMetrics {
+	return &PeerMetrics{
+		peers: promauto.NewGauge(prometheus.GaugeOpts{
+			Namespace: "sensor",
+			Name:      "peers",
+			Help:      "Number of peers the sensor is connected to",
+		}),
+		peersByDirection: promauto.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: "sensor",
+			Name:      "peers_by_direction",
+			Help:      "Number of peers the sensor is connected to, by who dialed the connection",
+		}, []string{"direction"}),
+	}
+}
+
+// Update sets the peer metrics from the currently connected peers.
+func (m *PeerMetrics) Update(peers []*ethp2p.Peer) {
+	inbound := 0
+	for _, peer := range peers {
+		if peer.Inbound() {
+			inbound++
+		}
+	}
+	m.set(len(peers), inbound)
+}
+
+func (m *PeerMetrics) set(total, inbound int) {
+	m.peers.Set(float64(total))
+	m.peersByDirection.WithLabelValues("inbound").Set(float64(inbound))
+	m.peersByDirection.WithLabelValues("outbound").Set(float64(total - inbound))
 }
 
 // NewRPCRequestsCounter creates and registers RPC requests counter metric.
