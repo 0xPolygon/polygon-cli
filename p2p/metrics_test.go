@@ -10,12 +10,12 @@ import (
 )
 
 // newTestPeerMetrics builds PeerMetrics without registering it, so each test
-// gets fresh gauges.
+// gets fresh gauges and can run any number of times.
 func newTestPeerMetrics() *PeerMetrics {
-	return &PeerMetrics{
-		peers:            prometheus.NewGauge(prometheus.GaugeOpts{Name: "peers"}),
-		peersByDirection: prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "peers_by_direction"}, []string{"direction"}),
-	}
+	return newPeerMetrics(
+		prometheus.NewGauge(prometheus.GaugeOpts{Name: "peers"}),
+		prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "peers_by_direction"}, []string{"direction"}),
+	)
 }
 
 func assertPeerMetrics(t *testing.T, m *PeerMetrics, total, inbound, outbound float64) {
@@ -73,7 +73,7 @@ func TestPeerMetricsUpdateCountsInboundPeers(t *testing.T) {
 }
 
 func TestNewPeerMetricsExportsBothDirectionsAtZero(t *testing.T) {
-	m := NewPeerMetrics()
+	m := newTestPeerMetrics()
 
 	if got := testutil.CollectAndCount(m.peersByDirection); got != 2 {
 		t.Fatalf("peers_by_direction series = %d, want 2 before the first update", got)
