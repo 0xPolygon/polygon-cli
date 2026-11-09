@@ -68,9 +68,11 @@ cross: $(BUILD_DIR) ## Cross-compile go binaries using CGO.
 .PHONY: cross-darwin
 cross-darwin: $(BUILD_DIR) ## Build a darwin release binary for the host architecture (requires CGO, must run on macOS).
 # Notes:
-# - A transitive dependency (vectorized-poseidon-gold) is CGO-only, so darwin
-#   binaries cannot be cross-compiled from linux and must be built natively on a
-#   macOS runner (one per architecture: amd64 on Intel, arm64 on Apple Silicon).
+# - vectorized-poseidon-gold (used by `polycli hash poseidongold`) is CGO-only,
+#   so full-featured darwin binaries must be built natively on a macOS runner
+#   (one per architecture: amd64 on Intel, arm64 on Apple Silicon). The
+#   `simplecross` target cross-compiles darwin without CGO and without
+#   poseidongold.
 # - Unlike the linux builds, darwin does not support fully static libc binaries,
 #   so the static external linking flags are omitted here.
 	echo "Building $(BIN_NAME)_$(GIT_TAG)_darwin_$$(go env GOARCH)..."

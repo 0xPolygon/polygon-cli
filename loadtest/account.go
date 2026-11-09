@@ -37,7 +37,8 @@ type AccountPoolConfig struct {
 	SequentialNonceFetch      bool
 	StopOnInsufficientFunds   bool
 	// Concurrency bounds the number of in-flight requests the parallel nonce
-	// sweep issues. Values <= 0 fall back to a single request at a time.
+	// sweep issues. It comes from --nonce-fetch-concurrency, or --concurrency
+	// when that is unset. Values <= 0 fall back to a single request at a time.
 	Concurrency int64
 	// Gas override settings
 	ForceGasPrice         uint64

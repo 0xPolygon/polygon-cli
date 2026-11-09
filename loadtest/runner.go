@@ -297,6 +297,11 @@ func (r *Runner) initParams(ctx context.Context) error {
 func (r *Runner) initAccountPool(ctx context.Context) error {
 	ecdsaPrivateKey := r.cfg.ECDSAPrivateKey
 
+	nonceFetchConcurrency := r.cfg.Concurrency
+	if r.cfg.NonceFetchConcurrency > 0 {
+		nonceFetchConcurrency = r.cfg.NonceFetchConcurrency
+	}
+
 	apCfg := &AccountPoolConfig{
 		FundingPrivateKey:         ecdsaPrivateKey,
 		FundingAmount:             r.cfg.AccountFundingAmount,
@@ -308,7 +313,7 @@ func (r *Runner) initAccountPool(ctx context.Context) error {
 		AccountsPerFundingTx:      r.cfg.AccountsPerFundingTx,
 		SequentialNonceFetch:      r.cfg.SequentialNonceFetch,
 		StopOnInsufficientFunds:   r.cfg.StopOnInsufficientFunds,
-		Concurrency:               r.cfg.Concurrency,
+		Concurrency:               nonceFetchConcurrency,
 		ForceGasPrice:             r.cfg.ForceGasPrice,
 		ForcePriorityGasPrice:     r.cfg.ForcePriorityGasPrice,
 		GasPriceMultiplier:        r.cfg.BigGasPriceMultiplier,
