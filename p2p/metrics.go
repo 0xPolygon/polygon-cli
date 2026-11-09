@@ -80,9 +80,10 @@ type PeerMetrics struct {
 	peersByDirection *prometheus.GaugeVec
 }
 
-// NewPeerMetrics creates and registers the peer metrics.
+// NewPeerMetrics creates and registers the peer metrics. Both directions start
+// at zero so the series exist before the first update.
 func NewPeerMetrics() *PeerMetrics {
-	return &PeerMetrics{
+	m := &PeerMetrics{
 		peers: promauto.NewGauge(prometheus.GaugeOpts{
 			Namespace: "sensor",
 			Name:      "peers",
@@ -91,16 +92,22 @@ func NewPeerMetrics() *PeerMetrics {
 		peersByDirection: promauto.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: "sensor",
 			Name:      "peers_by_direction",
-			Help:      "Number of peers the sensor is connected to, by who dialed the connection",
+			Help:      "Number of peers the sensor is connected to, by who dialed the connection (direction: inbound, outbound)",
 		}, []string{"direction"}),
 	}
+	m.set(0, 0)
+	return m
 }
 
 // Update sets the peer metrics from the currently connected peers.
 func (m *PeerMetrics) Update(peers []*ethp2p.Peer) {
+	m.update(peers, (*ethp2p.Peer).Inbound)
+}
+
+func (m *PeerMetrics) update(peers []*ethp2p.Peer, isInbound func(*ethp2p.Peer) bool) {
 	inbound := 0
 	for _, peer := range peers {
-		if peer.Inbound() {
+		if isInbound(peer) {
 			inbound++
 		}
 	}

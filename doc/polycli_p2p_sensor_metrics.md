@@ -85,7 +85,7 @@ Metric Type: Gauge
 
 
 ### sensor_peers_by_direction
-Number of peers the sensor is connected to, by who dialed the connection
+Number of peers the sensor is connected to, by who dialed the connection (direction: inbound, outbound)
 
 Metric Type: GaugeVec
 

@@ -58,3 +58,25 @@ func TestPeerMetricsUpdateCountsDialedPeersAsOutbound(t *testing.T) {
 	m.Update(nil)
 	assertPeerMetrics(t, m, 0, 0, 0)
 }
+
+func TestPeerMetricsUpdateCountsInboundPeers(t *testing.T) {
+	m := newTestPeerMetrics()
+
+	peers := []*ethp2p.Peer{
+		ethp2p.NewPeer(enode.ID{1}, "bor", nil),
+		ethp2p.NewPeer(enode.ID{2}, "bor", nil),
+		ethp2p.NewPeer(enode.ID{3}, "bor", nil),
+	}
+	inbound := map[enode.ID]bool{{1}: true, {3}: true}
+	m.update(peers, func(p *ethp2p.Peer) bool { return inbound[p.ID()] })
+	assertPeerMetrics(t, m, 3, 2, 1)
+}
+
+func TestNewPeerMetricsExportsBothDirectionsAtZero(t *testing.T) {
+	m := NewPeerMetrics()
+
+	if got := testutil.CollectAndCount(m.peersByDirection); got != 2 {
+		t.Fatalf("peers_by_direction series = %d, want 2 before the first update", got)
+	}
+	assertPeerMetrics(t, m, 0, 0, 0)
+}
