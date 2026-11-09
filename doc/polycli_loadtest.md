@@ -315,6 +315,7 @@ The codebase has a contract that used for load testing. It's written in Solidity
                                                          t, transaction - send transactions
                                                          v3, uniswapv3 - perform UniswapV3 swaps (default [t])
       --nonce uint                                       use this flag to manually set the starting nonce
+      --nonce-fetch-concurrency int                      max in-flight requests when fetching sending account nonces in parallel (0 uses --concurrency)
       --output-mode string                               format mode for summary output (json | text) (default "text")
       --output-raw-tx-only                               output raw signed transaction hex without sending (works with most modes except RPC and UniswapV3)
       --pre-fund-sending-accounts                        fund all sending accounts at start instead of on first use
