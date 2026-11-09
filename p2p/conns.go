@@ -513,9 +513,12 @@ func (c *Conns) BroadcastTxHashes(hashes []common.Hash) int {
 
 // BroadcastBlock broadcasts a full block to peers that don't already know
 // about it and returns the number of peers the block was successfully sent to.
-// If broadcast flags are disabled, this is a no-op.
-func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
-	if !c.shouldBroadcastBlocks || block == nil {
+// The block is sent as its header and body, the body exactly as cached: a
+// types.Block cannot hold Bor state-sync transactions, so re-encoding one would
+// send a body that does not match its header. If broadcast flags are disabled,
+// this is a no-op.
+func (c *Conns) BroadcastBlock(block *types.Block, body *eth.BlockBody, td *big.Int) int {
+	if !c.shouldBroadcastBlocks || block == nil || body == nil {
 		return 0
 	}
 
@@ -536,9 +539,9 @@ func (c *Conns) BroadcastBlock(block *types.Block, td *big.Int) int {
 				return
 			}
 
-			packet := NewBlockPacket{Block: block, TD: td}
-			peer.countMsgSent(packet.Name(), 1)
-			if err := ethp2p.Send(peer.rw, eth.NewBlockMsg, &packet); err != nil {
+			packet := newBlockFromBody(block.Header(), body, td)
+			peer.countMsgSent((*NewBlockPacket)(nil).Name(), 1)
+			if err := ethp2p.Send(peer.rw, eth.NewBlockMsg, packet); err != nil {
 				peer.logger.Debug().Err(err).Uint64("number", block.Number().Uint64()).Msg("Failed to send block")
 				return
 			}

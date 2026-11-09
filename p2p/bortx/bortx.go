@@ -108,17 +108,17 @@ func (b *Body) Root() common.Hash {
 // transactions the list is the same as encoding the decoded transactions.
 func (b *Body) RawList() (rlp.RawList[*types.Transaction], error) {
 	var list rlp.RawList[*types.Transaction]
-	for _, binary := range b.binaries {
+	for i, binary := range b.binaries {
 		item := binary
 		if binary[0] < 0xc0 {
 			enc, err := rlp.EncodeToBytes(binary)
 			if err != nil {
-				return list, err
+				return list, fmt.Errorf("encode transaction %d: %w", i, err)
 			}
 			item = enc
 		}
 		if err := list.AppendRaw(item); err != nil {
-			return list, err
+			return list, fmt.Errorf("append transaction %d: %w", i, err)
 		}
 	}
 	return list, nil
@@ -189,7 +189,7 @@ func DecodeList(list *rlp.RawList[*types.Transaction]) (*Body, error) {
 		}
 	}
 	if err := it.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("iterate block body transactions: %w", err)
 	}
 	return body, nil
 }

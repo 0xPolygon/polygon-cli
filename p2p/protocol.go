@@ -1226,6 +1226,22 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
+	// When the header is already held, the body is checked against its txRoot
+	// like a NewBlock is. A Bor state-sync item needs no signature, so without
+	// this a peer could append one to a real body and have it stored under the
+	// real block hash. Without a cached header the body is taken as before.
+	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.Header != nil {
+		if root := txs.Root(); root != cache.Header.TxHash {
+			c.logger.Warn().
+				Str("hash", hash.Hex()).
+				Str("want_tx_root", cache.Header.TxHash.Hex()).
+				Str("got_tx_root", root.Hex()).
+				Int("txs", len(txs.Hashes)).
+				Msg("Dropping block body that does not match its header")
+			return nil
+		}
+	}
+
 	c.db.WriteBlockBody(ctx, body, txs, ann, tfs)
 
 	// When cache-only-validated is enabled, only retain the body if the block
@@ -1409,14 +1425,9 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	// Broadcast block or block hash to other peers asynchronously. A full block
-	// is re-encoded from packet.Block, which cannot hold Bor state-sync
-	// transactions, so a block with one would go out with a body that does not
-	// match its header; only its hash is announced, and peers fetch the body,
-	// which the cache holds intact.
-	if txs.StateSyncCount() == 0 {
-		go c.conns.BroadcastBlock(packet.Block, packet.TD)
-	}
+	// Broadcast block or block hash to other peers asynchronously. The full block
+	// is sent from the raw body, so Bor state-sync transactions go out intact.
+	go c.conns.BroadcastBlock(packet.Block, body, packet.TD)
 	go c.conns.BroadcastBlockHashes(
 		[]common.Hash{hash},
 		[]uint64{packet.Block.Number().Uint64()},

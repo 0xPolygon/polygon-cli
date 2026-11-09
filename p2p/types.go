@@ -504,6 +504,32 @@ type rawNewBlockPacket struct {
 	TD    *big.Int
 }
 
+// encodedNewBlockPacket encodes a NewBlockMsg from a header and a raw body, so
+// the transactions go out as cached, Bor state-sync ones included.
+type encodedNewBlockPacket struct {
+	Block encodedBlock
+	TD    *big.Int
+}
+
+type encodedBlock struct {
+	Header      *types.Header
+	Txs         rlp.RawList[*types.Transaction]
+	Uncles      rlp.RawList[*types.Header]
+	Withdrawals *rlp.RawList[*types.Withdrawal] `rlp:"optional"`
+}
+
+func newBlockFromBody(header *types.Header, body *eth.BlockBody, td *big.Int) *encodedNewBlockPacket {
+	return &encodedNewBlockPacket{
+		Block: encodedBlock{
+			Header:      header,
+			Txs:         body.Transactions,
+			Uncles:      body.Uncles,
+			Withdrawals: body.Withdrawals,
+		},
+		TD: td,
+	}
+}
+
 // rawPooledTransactionsPacket is used to decode PooledTransactionsMsg with any transaction type.
 type rawPooledTransactionsPacket struct {
 	RequestId uint64

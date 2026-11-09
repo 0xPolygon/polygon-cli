@@ -570,12 +570,12 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, tx
 	}
 	hash := ann.Hash
 
-	// The body arrived: that is true whether or not it decodes, so the event is
-	// recorded first. Like the header sources it carries no peer -- the sensor
-	// requested it -- so it is excluded from the propagation rollup, but it makes
-	// "which sensor got the body, and when" answerable. Recording it first also
-	// keeps the two decode-failure paths below consistent: previously a failed
-	// transaction decode skipped the event while a failed uncle decode kept it.
+	// The body arrived: that is true whether or not its uncles decode, so the
+	// event is recorded first. Like the header sources it carries no peer -- the
+	// sensor requested it -- so it is excluded from the propagation rollup, but it
+	// makes "which sensor got the body, and when" answerable. The transactions
+	// were decoded before this was called (txs), so the uncle decode below is the
+	// only failure left here.
 	if c.recordsBlockEvents() {
 		c.blockEvt.add(chBlockEvent{
 			blockNumber:     ann.Number,
