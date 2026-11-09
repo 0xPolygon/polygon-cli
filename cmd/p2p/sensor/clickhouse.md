@@ -9,8 +9,6 @@ The DDL itself is not in this repo — it lives in
 (canonical) and is mirrored into `polygon-infrastructure`, which applies it to the
 ClickHouse VM.
 
-See also: [Datastore data model](/cmd/p2p/sensor/datastore.md).
-
 Block numbers collide across networks, so **each network gets its own database**
 (`mainnet`, `amoy`) and there is no chain column. The DSN selects it:
 `--clickhouse-dsn clickhouse://user:pass@host:9000/mainnet`.
@@ -444,8 +442,8 @@ flowchart LR
 
 **`WriteBlockHashFirstSeen` is a no-op.** Earliest first-seen is derived from the
 event stream by the `block_events_first` materialized view, so there is nothing to
-stamp on the block. The interface method stays because the Datastore backend does
-need it.
+stamp on the block. The interface method stays because the JSON backend writes a
+first-seen record from it.
 
 Because that rollup is keyed by `source`, it replaces both Datastore column pairs at
 once — `TimeFirstSeenHash`/`SensorFirstSeenHash` is `source = 'hash_announce'` and
@@ -493,9 +491,9 @@ and since `p2p.NewBlockHashesPacket` is defined as a slice of exactly that type,
 decoded packet is handed to the backend with no copy or conversion.
 
 **Peer identity is the devp2p node id**, not the enode URL, on both event
-streams — so events join to `peers` / `peers_current`. The Datastore
-backend uses `peer.URLv4()` here, which is why peers and events cannot be joined on
-that backend.
+streams — so events join to `peers` / `peers_current`. The retired Datastore
+backend used `peer.URLv4()` here, which is why peers and events could not be joined
+on that backend.
 
 ### Write volume
 

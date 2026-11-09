@@ -528,22 +528,6 @@ func getLatestBlock(url string) (*rpctypes.RawBlockResponse, error) {
 // on the sensor parameters.
 func newDatabase(ctx context.Context) (database.Database, error) {
 	switch inputSensorParams.Database {
-	case "datastore":
-		return database.NewDatastore(ctx, database.DatastoreOptions{
-			ProjectID:                        inputSensorParams.ProjectID,
-			DatabaseID:                       inputSensorParams.DatabaseID,
-			SensorID:                         inputSensorParams.SensorID,
-			ChainID:                          inputSensorParams.NetworkID,
-			MaxConcurrency:                   inputSensorParams.MaxDatabaseConcurrency,
-			ShouldWriteBlocks:                inputSensorParams.ShouldWriteBlocks,
-			ShouldWriteBlockEvents:           inputSensorParams.ShouldWriteBlockEvents,
-			ShouldWriteFirstBlockEvent:       inputSensorParams.ShouldWriteFirstBlockEvent,
-			ShouldWriteTransactions:          inputSensorParams.ShouldWriteTransactions,
-			ShouldWriteTransactionEvents:     inputSensorParams.ShouldWriteTransactionEvents,
-			ShouldWriteFirstTransactionEvent: inputSensorParams.ShouldWriteFirstTransactionEvent,
-			ShouldWritePeers:                 inputSensorParams.ShouldWritePeers,
-			TTL:                              inputSensorParams.TTL,
-		}), nil
 	case "clickhouse":
 		return database.NewClickHouse(ctx, database.ClickHouseOptions{
 			DSN:                              inputSensorParams.ClickHouseDSN,
@@ -582,8 +566,12 @@ func init() {
 	f.StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "comma separated nodes used for bootstrapping")
 	f.Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
 	flag.MarkFlagsRequired(SensorCmd, "network-id")
+	// The Datastore backend is retired. Its flags are still accepted so existing
+	// invocations keep parsing, but they do nothing.
 	f.StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	f.StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "datastore database ID")
+	flag.MarkDeprecated(SensorCmd, "project-id", "the Datastore backend is retired; use --database=clickhouse")
+	flag.MarkDeprecated(SensorCmd, "database-id", "the Datastore backend is retired; use --database=clickhouse")
 	f.StringVar(&inputSensorParams.ClickHouseDSN, "clickhouse-dsn", "",
 		"ClickHouse DSN, e.g. clickhouse://user:pass@host:9000/sensor (used with --database=clickhouse)")
 	f.DurationVar(&inputSensorParams.ClickHouseFlushInterval, "clickhouse-flush-interval", database.DefaultClickHouseFlushInterval,
@@ -651,10 +639,10 @@ intrinsic gas, fees); rejected transactions are still cached and written to the 
 	f.StringVar(&inputSensorParams.StaticNodesFile, "static-nodes", "", "static nodes file")
 	f.StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "trusted nodes file")
 	f.DurationVar(&inputSensorParams.TTL, "ttl", 14*24*time.Hour, "time to live")
+	flag.MarkDeprecated(SensorCmd, "ttl", "it only applied to the retired Datastore backend")
 	f.StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree URL")
 	f.StringVar(&inputSensorParams.Database, "database", "none",
 		`which database to persist data to, options are:
-  - datastore (GCP Datastore)
   - clickhouse (ClickHouse, see --clickhouse-dsn)
   - json (output to stdout)
   - none (no persistence)`)

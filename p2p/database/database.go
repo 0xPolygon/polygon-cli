@@ -57,19 +57,17 @@ type Database interface {
 	// stream, or just the first-seen ones); the backend only appends.
 	WriteBlockEvents(context.Context, *enode.Node, []BlockAnnouncement, time.Time)
 
-	// WriteBlockHashFirstSeen records the earliest event for a block hash on
-	// the block entity itself (Datastore's TimeFirstSeenHash). Backends that
-	// derive first-seen from the event stream (e.g. ClickHouse) treat it as a
-	// no-op.
+	// WriteBlockHashFirstSeen records the earliest event for a block hash.
+	// Backends that derive first-seen from the event stream (e.g. ClickHouse)
+	// treat it as a no-op.
 	WriteBlockHashFirstSeen(context.Context, *enode.Node, common.Hash, time.Time)
 
 	// WriteBlockBody writes the transactions carried in the block body (the block
 	// row itself comes from WriteBlock/WriteBlockHeaders). The announcement carries
 	// the height, which the eth block body does not, so backends that key
-	// observations by block number can record the body's arrival. Backends with a
-	// separate transactions table (e.g. ClickHouse) gate this on
-	// ShouldWriteTransactions; the Datastore backend gates on ShouldWriteBlocks
-	// because it links the transactions and uncles onto the block entity.
+	// observations by block number can record the body's arrival. ClickHouse
+	// writes the body facts if ShouldWriteBlocks and the transactions if
+	// ShouldWriteTransactions.
 	WriteBlockBody(context.Context, *eth.BlockBody, *bortx.Body, BlockAnnouncement, time.Time)
 
 	// WriteTransactions writes the transaction bodies if ShouldWriteTransactions

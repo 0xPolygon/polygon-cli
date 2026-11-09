@@ -11,10 +11,11 @@ import (
 
 type (
 	nodeListParams struct {
-		ProjectID  string
-		DatabaseID string
-		OutputFile string
-		Limit      int
+		ProjectID     string
+		DatabaseID    string
+		ClickHouseDSN string
+		OutputFile    string
+		Limit         int
 	}
 )
 
@@ -33,12 +34,7 @@ var NodeListCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
-		db := database.NewDatastore(cmd.Context(), database.DatastoreOptions{
-			ProjectID:  inputNodeListParams.ProjectID,
-			DatabaseID: inputNodeListParams.DatabaseID,
-		})
-
-		nodes, err := db.NodeList(ctx, inputNodeListParams.Limit)
+		nodes, err := database.ClickHouseNodeList(ctx, inputNodeListParams.ClickHouseDSN, inputNodeListParams.Limit)
 		if err != nil {
 			return err
 		}
@@ -59,7 +55,13 @@ var NodeListCmd = &cobra.Command{
 func init() {
 	f := NodeListCmd.Flags()
 	f.IntVarP(&inputNodeListParams.Limit, "limit", "l", 100, "number of unique nodes to return")
+	f.StringVar(&inputNodeListParams.ClickHouseDSN, "clickhouse-dsn", "",
+		"ClickHouse DSN of the sensor database to read peers from, e.g. clickhouse://user:pass@host:9000/mainnet")
+	flag.MarkFlagsRequired(NodeListCmd, "clickhouse-dsn")
+	// The Datastore backend is retired. Its flags are still accepted so existing
+	// invocations keep parsing, but they do nothing.
 	f.StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	f.StringVarP(&inputNodeListParams.DatabaseID, "database-id", "d", "", "datastore database ID")
-	flag.MarkFlagsRequired(NodeListCmd, "project-id")
+	flag.MarkDeprecated(NodeListCmd, "project-id", "the Datastore backend is retired; use --clickhouse-dsn")
+	flag.MarkDeprecated(NodeListCmd, "database-id", "the Datastore backend is retired; use --clickhouse-dsn")
 }

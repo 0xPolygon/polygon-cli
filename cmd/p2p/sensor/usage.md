@@ -2,8 +2,7 @@ Running the sensor will do peer discovery and continue to watch for blocks and
 transactions from those peers. This is useful for observing the network for
 forks and reorgs without the need to run the entire full node infrastructure.
 
-The sensor can persist data to various backends including ClickHouse, Google Cloud
-Datastore, or JSON output. If no nodes.json file exists at the specified path, it
+The sensor can persist data to ClickHouse or write it as JSON to stdout. If no nodes.json file exists at the specified path, it
 will be created automatically.
 
 The bootnodes may change, so refer to the [Polygon Knowledge Layer][bootnodes]
@@ -11,14 +10,12 @@ if the sensor is not discovering peers.
 
 ## Data Model
 
-The two persistent backends store different shapes, and are documented separately:
-
 - [ClickHouse data model](/cmd/p2p/sensor/clickhouse.md) — tables and write paths
-- [Datastore data model](/cmd/p2p/sensor/datastore.md) — kinds and write paths
 
-The ClickHouse backend is append-only and batched; the Datastore backend does a
-read-modify-write per entity. Select one with `--database`, and for ClickHouse pass
-`--clickhouse-dsn`. The ClickHouse DDL lives in `clickhouse/schema.sql` in the
+The ClickHouse backend is append-only and batched. Select it with
+`--database=clickhouse` and pass `--clickhouse-dsn`. The Google Cloud Datastore
+backend is retired; `--project-id`, `--database-id` and `--ttl` are still accepted
+but do nothing. The ClickHouse DDL lives in `clickhouse/schema.sql` in the
 sensor-network-tools repo, not here.
 
 ## JSON-RPC Server

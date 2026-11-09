@@ -20,10 +20,9 @@ polycli p2p nodelist [nodes.json] [flags]
 ## Flags
 
 ```bash
-  -d, --database-id string   datastore database ID
-  -h, --help                 help for nodelist
-  -l, --limit int            number of unique nodes to return (default 100)
-  -p, --project-id string    GCP project ID
+      --clickhouse-dsn string   ClickHouse DSN of the sensor database to read peers from, e.g. clickhouse://user:pass@host:9000/mainnet
+  -h, --help                    help for nodelist
+  -l, --limit int               number of unique nodes to return (default 100)
 ```
 
 The command also inherits flags from parent commands.

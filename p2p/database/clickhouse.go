@@ -152,7 +152,7 @@ type ClickHouseOptions struct {
 // NewClickHouse connects to ClickHouse, verifies connectivity, and starts the
 // background batch flushers. Callers should defer Close to drain buffered rows
 // on shutdown. If the connection cannot be established the returned Database
-// no-ops all writes (mirroring the Datastore backend) so the sensor keeps running.
+// no-ops all writes so the sensor keeps running.
 func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 	c := &ClickHouse{
 		sensorID:                         opts.SensorID,
@@ -762,6 +762,23 @@ func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 
 // NodeList returns the most recently seen peers' enode URLs, from the narrow
 // peers_current rollup rather than grouping over the event firehose.
+// ClickHouseNodeList returns the URLs of the most recently seen peers in the
+// sensor database at dsn. Unlike NewClickHouse, which discards everything when
+// it cannot connect so the sensor keeps running, it fails, so an unreachable
+// database is not mistaken for an empty node list.
+func ClickHouseNodeList(ctx context.Context, dsn string, limit int) ([]string, error) {
+	conn, err := connectClickHouse(ctx, dsn)
+	if err != nil {
+		return nil, fmt.Errorf("connect to ClickHouse: %w", err)
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close ClickHouse connection")
+		}
+	}()
+	return (&ClickHouse{conn: conn}).NodeList(ctx, limit)
+}
+
 func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) {
 	if c.conn == nil {
 		return []string{}, nil

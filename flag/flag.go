@@ -120,6 +120,19 @@ func MarkFlagsRequired(cmd *cobra.Command, flagNames ...string) {
 	}
 }
 
+// MarkDeprecated marks a regular flag as deprecated, so it is still accepted but
+// hidden from help and warned about when used, and logs a fatal error if marking
+// fails.
+func MarkDeprecated(cmd *cobra.Command, flagName, message string) {
+	if err := cmd.Flags().MarkDeprecated(flagName, message); err != nil {
+		log.Fatal().
+			Err(err).
+			Str("flag", flagName).
+			Str("command", cmd.Name()).
+			Msg("Failed to mark flag as deprecated")
+	}
+}
+
 // MarkPersistentFlagsRequired marks one or more persistent flags as required and logs a fatal error if marking fails.
 // This helper ensures consistent error handling across all commands when marking persistent flags as required.
 func MarkPersistentFlagsRequired(cmd *cobra.Command, flagNames ...string) {
