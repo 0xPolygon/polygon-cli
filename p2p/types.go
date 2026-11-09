@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog"
 
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
@@ -267,7 +268,7 @@ func (c *rlpxConn) Read() Message {
 		}
 		return (*BlockBodies)(ethMsg)
 	case (NewBlock{}).Code():
-		msg = new(NewBlock)
+		return decodeNewBlock(rawData)
 	case (NewBlockHashes{}).Code():
 		msg = new(NewBlockHashes)
 	case (Transactions{}).Code():
@@ -310,6 +311,26 @@ func (c *rlpxConn) Read() Message {
 		return msg
 	}
 	return errorf("invalid message: %s", string(rawData))
+}
+
+// decodeNewBlock decodes a NewBlock message through its raw transactions, so a
+// block carrying a Bor state-sync transaction is not an error that ends the
+// connection. The block holds the transactions go-ethereum can decode.
+func decodeNewBlock(rawData []byte) Message {
+	var raw rawNewBlockPacket
+	if err := rlp.DecodeBytes(rawData, &raw); err != nil {
+		return errorf("could not rlp decode message: %v", err)
+	}
+	txs, err := bortx.Decode(raw.Block.Txs)
+	if err != nil {
+		return errorf("could not decode new block transactions: %v", err)
+	}
+	block := types.NewBlockWithHeader(raw.Block.Header).WithBody(types.Body{
+		Transactions: txs.Txs,
+		Uncles:       raw.Block.Uncles,
+		Withdrawals:  raw.Block.Withdrawals,
+	})
+	return &NewBlock{Block: block, TD: raw.TD}
 }
 
 // Write writes a eth packet to the connection.

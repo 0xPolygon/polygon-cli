@@ -122,3 +122,25 @@ func TestHandleNewBlockKeepsStateSyncTx(t *testing.T) {
 		t.Fatalf("cached body root %s does not match header TxHash %s", cached.Root().Hex(), block.Header.TxHash.Hex())
 	}
 }
+
+// TestDecodeNewBlockKeepsStateSyncTx is the regression test for the rlpx reader
+// used by `p2p ping`: a NewBlock carrying a Bor state-sync transaction decoded to
+// an *Error, and ReadAndServe ends the connection on one.
+func TestDecodeNewBlockKeepsStateSyncTx(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	raw, err := rlp.EncodeToBytes(&rawNewBlockPacket{Block: block, TD: big.NewInt(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg, ok := decodeNewBlock(raw).(*NewBlock)
+	if !ok {
+		t.Fatalf("decodeNewBlock returned %T, want *NewBlock", decodeNewBlock(raw))
+	}
+	if msg.Block.Hash() != block.Header.Hash() {
+		t.Fatalf("block hash = %s, want %s", msg.Block.Hash().Hex(), block.Header.Hash().Hex())
+	}
+	if got := len(msg.Block.Transactions()); got != len(block.Txs)-1 {
+		t.Fatalf("block holds %d transactions, want %d (all but the state-sync one)", got, len(block.Txs)-1)
+	}
+}
