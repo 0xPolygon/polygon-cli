@@ -40,16 +40,16 @@ func loadStateSyncBlock(t *testing.T) rawBlock {
 	return block
 }
 
-// blockWriteDB records the block and body passed to WriteBlock.
+// blockWriteDB records the block and transactions passed to WriteBlock.
 type blockWriteDB struct {
 	database.Database
 	block *types.Block
-	body  *eth.BlockBody
+	txs   *bortx.Body
 }
 
-func (d *blockWriteDB) WriteBlock(_ context.Context, _ *enode.Node, block *types.Block, body *eth.BlockBody, _ *big.Int, _ time.Time) {
+func (d *blockWriteDB) WriteBlock(_ context.Context, _ *enode.Node, block *types.Block, txs *bortx.Body, _ *big.Int, _ time.Time) {
 	d.block = block
-	d.body = body
+	d.txs = txs
 }
 
 // TestBuildBlockBodyKeepsStateSyncTx is the regression test for BlockBodies
@@ -63,7 +63,7 @@ func TestBuildBlockBodyKeepsStateSyncTx(t *testing.T) {
 	}
 
 	c := &conn{}
-	built, err := c.buildBlockBody(raw)
+	built, txs, err := c.buildBlockBody(raw)
 	if err != nil {
 		t.Fatalf("buildBlockBody: %v", err)
 	}
@@ -75,9 +75,8 @@ func TestBuildBlockBodyKeepsStateSyncTx(t *testing.T) {
 	if !bytes.Equal(built.Transactions.Bytes(), want) {
 		t.Fatal("built body transactions differ from the ones received")
 	}
-	txs, err := bortx.DecodeList(&built.Transactions)
-	if err != nil {
-		t.Fatalf("DecodeList: %v", err)
+	if len(txs.Hashes) != len(block.Txs) || txs.StateSyncCount() != 1 {
+		t.Fatalf("decoded %d transactions with %d state-sync, want %d with 1", len(txs.Hashes), txs.StateSyncCount(), len(block.Txs))
 	}
 	if txs.Root() != block.Header.TxHash {
 		t.Fatalf("built body root %s does not match header TxHash %s", txs.Root().Hex(), block.Header.TxHash.Hex())
@@ -101,10 +100,10 @@ func TestHandleNewBlockKeepsStateSyncTx(t *testing.T) {
 	}
 
 	hash := block.Header.Hash()
-	if db.body == nil {
+	if db.txs == nil {
 		t.Fatal("block with a state-sync transaction was not written")
 	}
-	if got := db.body.Transactions.Len(); got != len(block.Txs) {
+	if got := len(db.txs.Hashes); got != len(block.Txs) {
 		t.Fatalf("written body has %d transactions, want %d", got, len(block.Txs))
 	}
 	if got := len(db.block.Transactions()); got != len(block.Txs)-1 {

@@ -476,11 +476,12 @@ func (c *ClickHouse) recordsTxEvents() bool {
 	return c.shouldWriteTransactionEvents || c.shouldWriteFirstTransactionEvent
 }
 
-func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, body *eth.BlockBody, td *big.Int, tfs time.Time) {
+func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, txs *bortx.Body, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
 		// blocks + block_bodies + block_total_difficulty + the event, then one
-		// block_txs and one transactions row per transaction.
-		c.discarded.Add(4 + 2*uint64(body.Transactions.Len()))
+		// block_txs row per transaction and one transactions row per transaction
+		// that is not a Bor state-sync transaction.
+		c.discarded.Add(4 + uint64(len(txs.Hashes)) + uint64(len(txs.Txs)))
 		return
 	}
 	// Which peer announced which total difficulty is an observation, so it rides on
@@ -519,19 +520,6 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	}
 	if c.shouldWriteBlocks {
 		c.addBlock(block.Header())
-	}
-	if !c.shouldWriteBlocks && !c.shouldWriteTransactions {
-		return
-	}
-	// The body was decoded and checked against the header's txRoot before it got
-	// here, so this cannot fail on a block from the NewBlock path; if it somehow
-	// does, the body facts are skipped rather than written short.
-	txs, err := bortx.DecodeList(&body.Transactions)
-	if err != nil {
-		log.Error().Err(err).Str("hash", block.Hash().Hex()).Msg("Failed to decode transactions from block body")
-		return
-	}
-	if c.shouldWriteBlocks {
 		c.writeBlockBody(block.Hash(), txs.Hashes, block.Uncles(), tfs)
 	}
 	if c.shouldWriteTransactions {
@@ -575,7 +563,7 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	}
 }
 
-func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 	if c.conn == nil {
 		c.discarded.Add(1)
 		return
@@ -596,15 +584,6 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, an
 			seenAt:          tfs,
 			totalDifficulty: big.NewInt(0),
 		})
-	}
-
-	txs, err := bortx.DecodeList(&body.Transactions)
-	if err != nil {
-		// Nothing downstream is derivable: block_bodies needs the count, block_txs
-		// and transactions need the transactions themselves. Bor state-sync
-		// transactions decode here (see bortx); anything else unknown does not.
-		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
-		return
 	}
 
 	// Each fact is skipped exactly when ITS inputs are undecodable, no wider.

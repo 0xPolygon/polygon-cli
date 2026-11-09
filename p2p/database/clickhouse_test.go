@@ -15,9 +15,10 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 )
 
 // Test block heights live in a reserved band far above any real chain head, one
@@ -212,7 +213,7 @@ func TestClickHouseWrites(t *testing.T) {
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
 	peer := testPeer(t)
 
-	db.WriteBlock(ctx, peer, block, bodyOf(t, block), big.NewInt(100), now)
+	db.WriteBlock(ctx, peer, block, txsOf(t, block), big.NewInt(100), now)
 	db.WriteTransactions(ctx, peer, []*types.Transaction{tx}, now)
 	db.WritePeers(ctx, nil, now) // empty peer slice is fine; exercises the path
 
@@ -326,7 +327,7 @@ func TestClickHouseHeaderDoesNotClobberBody(t *testing.T) {
 
 	// Full block first, then the same header again a second later -- the ordering
 	// that used to lose the counts.
-	db.WriteBlock(ctx, peer, block, bodyOf(t, block), big.NewInt(100), now)
+	db.WriteBlock(ctx, peer, block, txsOf(t, block), big.NewInt(100), now)
 	db.WriteBlockHeaders(ctx, []*types.Header{block.Header()}, now.Add(time.Second), true)
 
 	if cerr := db.Close(); cerr != nil {
@@ -452,7 +453,7 @@ func TestClickHouseProductionFlagsRecordProvenance(t *testing.T) {
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
 	peer := testPeer(t)
 
-	db.WriteBlock(ctx, peer, block, bodyOf(t, block), big.NewInt(555), now)
+	db.WriteBlock(ctx, peer, block, txsOf(t, block), big.NewInt(555), now)
 	db.WriteBlockHeaders(ctx, []*types.Header{header}, now, false)
 	db.WriteTransactions(ctx, peer, []*types.Transaction{tx}, now)
 
@@ -548,7 +549,7 @@ func TestClickHouseTotalDifficultySurvivesEventExpiry(t *testing.T) {
 	block := types.NewBlockWithHeader(header)
 	wantTD := big.NewInt(987654321)
 
-	db.WriteBlock(ctx, testPeer(t), block, bodyOf(t, block), wantTD, now)
+	db.WriteBlock(ctx, testPeer(t), block, txsOf(t, block), wantTD, now)
 	if cerr := db.Close(); cerr != nil {
 		t.Fatalf("close db: %v", cerr)
 	}
@@ -623,7 +624,7 @@ func TestAddressesAreStoredLowercase(t *testing.T) {
 	wantFrom := strings.ToLower(crypto.PubkeyToAddress(senderKey.PublicKey).Hex())
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
 
-	db.WriteBlock(ctx, testPeer(t), block, bodyOf(t, block), big.NewInt(1), now)
+	db.WriteBlock(ctx, testPeer(t), block, txsOf(t, block), big.NewInt(1), now)
 	db.WriteTransactions(ctx, testPeer(t), []*types.Transaction{tx}, now)
 	if cerr := db.Close(); cerr != nil {
 		t.Fatalf("close db: %v", cerr)
@@ -774,7 +775,7 @@ func TestUnavailableBackendKeepsWarning(t *testing.T) {
 	tx1 := types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()), GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)})
 	tx2 := types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()) + 1, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)})
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx1, tx2}})
-	db.WriteBlock(ctx, testPeer(t), block, bodyOf(t, block), big.NewInt(1), now)
+	db.WriteBlock(ctx, testPeer(t), block, txsOf(t, block), big.NewInt(1), now)
 	// 4 block-level rows (blocks, block_bodies, block_total_difficulty, the event)
 	// plus block_txs and transactions per transaction.
 	if got := ch.discarded.Load(); got != 8 {
@@ -790,19 +791,18 @@ func TestUnavailableBackendKeepsWarning(t *testing.T) {
 	}
 }
 
-// bodyOf encodes a block's transactions and uncles into the raw body WriteBlock
-// takes alongside the block.
-func bodyOf(t *testing.T, block *types.Block) *eth.BlockBody {
+// txsOf returns a block's transactions decoded as WriteBlock takes them.
+func txsOf(t *testing.T, block *types.Block) *bortx.Body {
 	t.Helper()
-	txs, err := rlp.EncodeToRawList([]*types.Transaction(block.Transactions()))
+	list, err := rlp.EncodeToRawList([]*types.Transaction(block.Transactions()))
 	if err != nil {
 		t.Fatalf("encode transactions: %v", err)
 	}
-	uncles, err := rlp.EncodeToRawList(block.Uncles())
+	txs, err := bortx.DecodeList(&list)
 	if err != nil {
-		t.Fatalf("encode uncles: %v", err)
+		t.Fatalf("decode transactions: %v", err)
 	}
-	return &eth.BlockBody{Transactions: txs, Uncles: uncles}
+	return txs
 }
 
 // stateSyncTxItem returns a Bor state-sync transaction (type 0x7f) as a block
@@ -847,13 +847,20 @@ func TestClickHouseWritesBodyWithStateSyncTx(t *testing.T) {
 		Value:    big.NewInt(1),
 	})
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
-	body := bodyOf(t, block)
+	list, err := rlp.EncodeToRawList([]*types.Transaction(block.Transactions()))
+	if err != nil {
+		t.Fatalf("encode transactions: %v", err)
+	}
 	stateSync, stateSyncHash := stateSyncTxItem(t, uint64(now.UnixNano()))
-	if err := body.Transactions.AppendRaw(stateSync); err != nil {
+	if err = list.AppendRaw(stateSync); err != nil {
 		t.Fatalf("append state-sync tx: %v", err)
 	}
+	txs, err := bortx.DecodeList(&list)
+	if err != nil {
+		t.Fatalf("decode transactions: %v", err)
+	}
 
-	db.WriteBlock(ctx, testPeer(t), block, body, big.NewInt(1), now)
+	db.WriteBlock(ctx, testPeer(t), block, txs, big.NewInt(1), now)
 	if cerr := db.Close(); cerr != nil {
 		t.Fatalf("close db: %v", cerr)
 	}

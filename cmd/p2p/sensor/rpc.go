@@ -733,8 +733,6 @@ func formatBlockResponse(hash common.Hash, cache p2p.BlockCache, fullTx bool) ma
 	return result
 }
 
-// formatTransactionResponse formats a transaction into the Ethereum JSON-RPC format.
-// If blockHash is empty, the transaction is considered pending.
 // decodeCachedBody decodes the transactions of a cached block body, or returns
 // nil if the block has no body yet.
 func decodeCachedBody(cache p2p.BlockCache) (*bortx.Body, error) {
@@ -783,6 +781,8 @@ func formatBodyTxResponse(body *bortx.Body, i int, blockHash common.Hash, header
 	return result
 }
 
+// formatTransactionResponse formats a transaction into the Ethereum JSON-RPC format.
+// If blockHash is empty, the transaction is considered pending.
 func formatTransactionResponse(tx *types.Transaction, blockHash common.Hash, header *types.Header, index uint64) map[string]any {
 	v, r, s := tx.RawSignatureValues()
 

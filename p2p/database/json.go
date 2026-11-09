@@ -14,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
+
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 )
 
 // JSONDatabase outputs data as JSON to stdout.
@@ -139,9 +141,9 @@ func (j *JSONDatabase) Write(v any) {
 }
 
 // WriteBlock writes the block and the block event as JSON.
-func (j *JSONDatabase) WriteBlock(_ context.Context, peer *enode.Node, block *types.Block, body *eth.BlockBody, td *big.Int, tfs time.Time) {
+func (j *JSONDatabase) WriteBlock(_ context.Context, peer *enode.Node, block *types.Block, txs *bortx.Body, td *big.Int, tfs time.Time) {
 	j.writeBlockEvent(peer, block, tfs)
-	j.writeBlock(block, body, td, tfs)
+	j.writeBlock(block, txs, td, tfs)
 }
 
 func (j *JSONDatabase) writeBlockEvent(peer *enode.Node, block *types.Block, tfs time.Time) {
@@ -160,7 +162,7 @@ func (j *JSONDatabase) writeBlockEvent(peer *enode.Node, block *types.Block, tfs
 	j.Write(event)
 }
 
-func (j *JSONDatabase) writeBlock(block *types.Block, body *eth.BlockBody, td *big.Int, tfs time.Time) {
+func (j *JSONDatabase) writeBlock(block *types.Block, txs *bortx.Body, td *big.Int, tfs time.Time) {
 	if !j.ShouldWriteBlocks() {
 		return
 	}
@@ -176,7 +178,7 @@ func (j *JSONDatabase) writeBlock(block *types.Block, body *eth.BlockBody, td *b
 		GasUsed:         block.GasUsed(),
 		Difficulty:      block.Difficulty().String(),
 		TotalDifficulty: td.String(),
-		TxCount:         body.Transactions.Len(),
+		TxCount:         len(txs.Hashes),
 		UncleCount:      len(block.Uncles()),
 		TimeFirstSeen:   tfs,
 	}
@@ -254,7 +256,7 @@ func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.
 }
 
 // WriteBlockBody writes the block body as JSON.
-func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 	hash := ann.Hash
 	if !j.ShouldWriteBlocks() {
 		return
@@ -264,7 +266,7 @@ func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, 
 		"type":            "block_body",
 		"sensor_id":       j.sensorID,
 		"hash":            hash.Hex(),
-		"tx_count":        body.Transactions.Len(),
+		"tx_count":        len(txs.Hashes),
 		"uncle_count":     body.Uncles.Len(),
 		"time_first_seen": tfs,
 	}

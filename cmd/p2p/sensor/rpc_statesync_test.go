@@ -31,7 +31,7 @@ func TestFormatBodyTxResponseCoversStateSyncTx(t *testing.T) {
 		Txs    []rlp.RawValue
 		Uncles []*types.Header
 	}
-	if err := rlp.DecodeBytes(enc, &block); err != nil {
+	if err = rlp.DecodeBytes(enc, &block); err != nil {
 		t.Fatal(err)
 	}
 	body, err := bortx.Decode(block.Txs)

@@ -1220,13 +1220,13 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	body, err := c.buildBlockBody(packet.BlockBodiesRLPResponse[0])
+	body, txs, err := c.buildBlockBody(packet.BlockBodiesRLPResponse[0])
 	if err != nil {
 		c.logger.Warn().Err(err).Msg("Failed to build block body")
 		return nil
 	}
 
-	c.db.WriteBlockBody(ctx, body, ann, tfs)
+	c.db.WriteBlockBody(ctx, body, txs, ann, tfs)
 
 	// When cache-only-validated is enabled, only retain the body if the block
 	// already has a cache entry (the announcement marker, or a cached header).
@@ -1252,13 +1252,9 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	}
 
 	if header != nil {
-		// Decode RawLists back to slices for creating types.Block. Bor state-sync
-		// transactions cannot be held by a types.Block and are left out; this
-		// block only tracks the head.
-		var blockTxs []*types.Transaction
-		if decoded, err := bortx.DecodeList(&body.Transactions); err == nil {
-			blockTxs = decoded.Txs
-		}
+		// Bor state-sync transactions cannot be held by a types.Block and are
+		// left out; this block only tracks the head.
+		blockTxs := txs.Txs
 		blockUncles, _ := body.Uncles.Items()
 		var blockWithdrawals []*types.Withdrawal
 		if body.Withdrawals != nil {
@@ -1279,18 +1275,23 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 }
 
 // buildBlockBody decodes a raw RLP block body and re-encodes it into an
-// eth.BlockBody of raw lists.
-func (c *conn) buildBlockBody(raw []byte) (*eth.BlockBody, error) {
+// eth.BlockBody of raw lists. It also returns the decoded transactions, so
+// callers do not decode the body again.
+func (c *conn) buildBlockBody(raw []byte) (*eth.BlockBody, *bortx.Body, error) {
 	var decoded rawBlockBody
 	if err := rlp.DecodeBytes(raw, &decoded); err != nil {
-		return nil, fmt.Errorf("failed to decode block body: %w", err)
+		return nil, nil, fmt.Errorf("failed to decode block body: %w", err)
 	}
 
 	txs, err := c.decodeTxsStrict(decoded.Transactions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode block body transactions: %w", err)
+		return nil, nil, fmt.Errorf("failed to decode block body transactions: %w", err)
 	}
-	return newRawBlockBody(txs, decoded.Uncles, decoded.Withdrawals)
+	body, err := newRawBlockBody(txs, decoded.Uncles, decoded.Withdrawals)
+	if err != nil {
+		return nil, nil, err
+	}
+	return body, txs, nil
 }
 
 func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
@@ -1389,7 +1390,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.db.WriteBlock(ctx, c.node, packet.Block, body, packet.TD, tfs)
+	c.db.WriteBlock(ctx, c.node, packet.Block, txs, packet.TD, tfs)
 
 	// Only rebroadcast blocks signed by a known validator. Persistence above is
 	// unconditional; signer validation gates rebroadcast (and caching) only.
