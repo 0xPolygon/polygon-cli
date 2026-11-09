@@ -135,6 +135,7 @@ type Config struct {
 	DumpSendingAccountsFile   string
 	AccountsPerFundingTx      uint64
 	SequentialNonceFetch      bool
+	NonceFetchConcurrency     int64
 	StopOnInsufficientFunds   bool
 
 	// Summary output
@@ -316,6 +317,10 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("unable to read calldata file %q: %w", c.ContractCallDataFile, err)
 		}
 		c.ContractCallData = strings.TrimSpace(string(data))
+	}
+
+	if c.NonceFetchConcurrency < 0 {
+		return fmt.Errorf("--nonce-fetch-concurrency must be >= 0, got %d", c.NonceFetchConcurrency)
 	}
 
 	if c.DuplicateNonceRate < 0 {
