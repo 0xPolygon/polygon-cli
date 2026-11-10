@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rs/zerolog"
 
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 )
 
@@ -130,6 +131,9 @@ func (NewBlockHashesPacket) Name() string { return "NewBlockHashes" }
 type NewBlockPacket struct {
 	Block *types.Block
 	TD    *big.Int
+	// Txs is the block's decoded body, Bor state-sync transactions included,
+	// which Block cannot hold. It is not part of the message.
+	Txs *bortx.Body `rlp:"-"`
 }
 
 func (*NewBlockPacket) Name() string { return "NewBlock" }
@@ -267,7 +271,7 @@ func (c *rlpxConn) Read() Message {
 		}
 		return (*BlockBodies)(ethMsg)
 	case (NewBlock{}).Code():
-		msg = new(NewBlock)
+		return decodeNewBlock(rawData)
 	case (NewBlockHashes{}).Code():
 		msg = new(NewBlockHashes)
 	case (Transactions{}).Code():
@@ -310,6 +314,25 @@ func (c *rlpxConn) Read() Message {
 		return msg
 	}
 	return errorf("invalid message: %s", string(rawData))
+}
+
+// decodeNewBlock decodes a NewBlock message through its raw transactions, so a
+// block carrying a Bor state-sync transaction is not an error that ends the
+// connection. The block holds the transactions go-ethereum can decode.
+func decodeNewBlock(rawData []byte) Message {
+	var raw rawNewBlockPacket
+	if err := rlp.DecodeBytes(rawData, &raw); err != nil {
+		return errorf("could not rlp decode message: %v", err)
+	}
+	txs, err := bortx.Decode(raw.Block.Txs)
+	if err != nil {
+		return errorf("could not decode new block transactions: %v", err)
+	}
+	block, err := blockFromRaw(raw.Block, txs)
+	if err != nil {
+		return errorf("could not verify new block: %v", err)
+	}
+	return &NewBlock{Block: block, TD: raw.TD, Txs: txs}
 }
 
 // Write writes a eth packet to the connection.
@@ -481,6 +504,32 @@ type rawBlock struct {
 type rawNewBlockPacket struct {
 	Block rawBlock
 	TD    *big.Int
+}
+
+// encodedNewBlockPacket encodes a NewBlockMsg from a header and a raw body, so
+// the transactions go out as cached, Bor state-sync ones included.
+type encodedNewBlockPacket struct {
+	Block encodedBlock
+	TD    *big.Int
+}
+
+type encodedBlock struct {
+	Header      *types.Header
+	Txs         rlp.RawList[*types.Transaction]
+	Uncles      rlp.RawList[*types.Header]
+	Withdrawals *rlp.RawList[*types.Withdrawal] `rlp:"optional"`
+}
+
+func newBlockFromBody(header *types.Header, body *eth.BlockBody, td *big.Int) *encodedNewBlockPacket {
+	return &encodedNewBlockPacket{
+		Block: encodedBlock{
+			Header:      header,
+			Txs:         body.Transactions,
+			Uncles:      body.Uncles,
+			Withdrawals: body.Withdrawals,
+		},
+		TD: td,
+	}
 }
 
 // rawPooledTransactionsPacket is used to decode PooledTransactionsMsg with any transaction type.

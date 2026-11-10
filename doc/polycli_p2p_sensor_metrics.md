@@ -84,6 +84,15 @@ Number of peers the sensor is connected to
 Metric Type: Gauge
 
 
+### sensor_peers_by_direction
+Number of peers the sensor is connected to, by who dialed the connection (direction: inbound, outbound)
+
+Metric Type: GaugeVec
+
+Variable Labels:
+- direction
+
+
 ### sensor_rpc_requests
 Number of RPC requests made
 

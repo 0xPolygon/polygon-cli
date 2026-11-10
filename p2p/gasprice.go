@@ -7,6 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 )
 
 // Gas price oracle constants (matching Bor/geth defaults)
@@ -85,7 +87,7 @@ func (o *GasPriceOracle) suggestLegacyGasPrice() *big.Int {
 			continue
 		}
 
-		txs, err := cache.Body.Transactions.Items()
+		txs, err := bortx.DecodeTxs(&cache.Body.Transactions)
 		if err != nil {
 			continue
 		}
@@ -193,7 +195,7 @@ func (o *GasPriceOracle) getBlockTips(hash common.Hash, limit int, ignoreUnder *
 	}
 
 	// Calculate tips for all transactions
-	txs, err := cache.Body.Transactions.Items()
+	txs, err := bortx.DecodeTxs(&cache.Body.Transactions)
 	if err != nil {
 		return nil
 	}

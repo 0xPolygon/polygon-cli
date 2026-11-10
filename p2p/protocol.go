@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -17,10 +18,10 @@ import (
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
 	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 )
@@ -921,16 +922,54 @@ func (c *conn) countTxDecodeError() {
 // a separate round trip and may not be held yet -- so a peer can still substitute a
 // well-formed body for a hash it does not belong to. Failing closed on undecodable
 // input is the part that can be done here.
-func (c *conn) decodeTxsStrict(rawTxs []rlp.RawValue) ([]*types.Transaction, error) {
-	txs := make([]*types.Transaction, 0, len(rawTxs))
-	for i, raw := range rawTxs {
-		tx := c.decodeTx(raw)
-		if tx == nil {
-			return nil, fmt.Errorf("transaction %d of %d failed to decode", i, len(rawTxs))
+//
+// Bor state-sync transactions (type 0x7f) are part of the body and of txRoot but
+// cannot be decoded into a go-ethereum transaction, so they are validated and
+// hashed from their encoding instead (see bortx) rather than rejecting the block.
+func (c *conn) decodeTxsStrict(rawTxs []rlp.RawValue) (*bortx.Body, error) {
+	body, err := bortx.Decode(rawTxs)
+	if err != nil {
+		c.countTxDecodeError()
+		var decodeErr *bortx.DecodeError
+		if errors.As(err, &decodeErr) {
+			c.logger.Warn().
+				Err(decodeErr.Err).
+				Int("type", decodeErr.Type).
+				Int("size", decodeErr.Size).
+				Str("hash", decodeErr.Hash.Hex()).
+				Msg("Failed to decode transaction")
 		}
-		txs = append(txs, tx)
+		return nil, err
 	}
-	return txs, nil
+	return body, nil
+}
+
+// newRawBlockBody builds an eth.BlockBody from a decoded body. Its transactions
+// come from the body's encoding rather than from go-ethereum transactions, which
+// cannot hold Bor state-sync transactions; a body served or stored without them
+// is not the body its block hash commits to.
+func newRawBlockBody(txs *bortx.Body, uncles []*types.Header, withdrawals []*types.Withdrawal) (*eth.BlockBody, error) {
+	txList, err := txs.RawList()
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode transactions: %w", err)
+	}
+	uncleList, err := rlp.EncodeToRawList(uncles)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode uncles: %w", err)
+	}
+	var withdrawalList *rlp.RawList[*types.Withdrawal]
+	if withdrawals != nil {
+		wl, err := rlp.EncodeToRawList(withdrawals)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode withdrawals: %w", err)
+		}
+		withdrawalList = &wl
+	}
+	return &eth.BlockBody{
+		Transactions: txList,
+		Uncles:       uncleList,
+		Withdrawals:  withdrawalList,
+	}, nil
 }
 
 // decodeTxs decodes a list of transactions, returning only successfully decoded ones.
@@ -979,31 +1018,6 @@ func (c *conn) processTransactions(ctx context.Context, txs []*types.Transaction
 	// Broadcast transactions or hashes to other peers asynchronously
 	go c.conns.BroadcastTxs(types.Transactions(broadcastTxs))
 	go c.conns.BroadcastTxHashes(broadcastHashes)
-}
-
-// encodeBlockBody converts a block to an eth.BlockBody with RLP-encoded fields.
-func encodeBlockBody(block *types.Block) (*eth.BlockBody, error) {
-	txList, err := rlp.EncodeToRawList([]*types.Transaction(block.Transactions()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode transactions: %w", err)
-	}
-	uncleList, err := rlp.EncodeToRawList(block.Uncles())
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode uncles: %w", err)
-	}
-	var withdrawalList *rlp.RawList[*types.Withdrawal]
-	if withdrawals := block.Withdrawals(); withdrawals != nil {
-		wl, err := rlp.EncodeToRawList([]*types.Withdrawal(withdrawals))
-		if err != nil {
-			return nil, fmt.Errorf("failed to encode withdrawals: %w", err)
-		}
-		withdrawalList = &wl
-	}
-	return &eth.BlockBody{
-		Transactions: txList,
-		Uncles:       uncleList,
-		Withdrawals:  withdrawalList,
-	}, nil
 }
 
 func (c *conn) handleTransactions(ctx context.Context, msg ethp2p.Msg) error {
@@ -1112,6 +1126,13 @@ func (c *conn) cacheAndAnnounceHeader(header *types.Header, isParent, announce b
 
 	if c.conns.ShouldCachePayload(known) {
 		c.conns.Blocks().Update(header.Hash(), func(cache BlockCache) BlockCache {
+			// A body cached before this header was not checked against it; drop it
+			// if it does not match, so it is never served or completed as the head.
+			if cache.Body != nil && cache.TxRoot != header.TxHash {
+				c.logBodyRootMismatch(header.Hash(), header.TxHash, cache.TxRoot)
+				cache.Body = nil
+				cache.TxRoot = common.Hash{}
+			}
 			cache.Header = header
 			return cache
 		})
@@ -1203,17 +1224,28 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	c.requests.Remove(packet.RequestId)
 
 	// Check if we already have the body in the cache
-	if cache, ok := c.conns.Blocks().Peek(hash); ok && cache.Body != nil {
+	cached, inCache := c.conns.Blocks().Peek(hash)
+	if inCache && cached.Body != nil {
 		return nil
 	}
 
-	body, err := c.buildBlockBody(packet.BlockBodiesRLPResponse[0])
+	body, txs, err := c.buildBlockBody(packet.BlockBodiesRLPResponse[0])
 	if err != nil {
 		c.logger.Warn().Err(err).Msg("Failed to build block body")
 		return nil
 	}
 
-	c.db.WriteBlockBody(ctx, body, ann, tfs)
+	// When the header is already held, the body is checked against its txRoot
+	// like a NewBlock is, before it is written. A body that arrives first is
+	// checked when its header does (cacheAndAnnounceHeader), and again below in
+	// the same update that attaches it, in case the header lands in between.
+	root := txs.Root()
+	if inCache && cached.Header != nil && root != cached.Header.TxHash {
+		c.logBodyRootMismatch(hash, cached.Header.TxHash, root)
+		return nil
+	}
+
+	c.db.WriteBlockBody(ctx, body, txs, ann, tfs)
 
 	// When cache-only-validated is enabled, only retain the body if the block
 	// already has a cache entry (the announcement marker, or a cached header).
@@ -1232,69 +1264,80 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	var header *types.Header
 	if retainBody {
 		c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
+			if cache.Header != nil && cache.Header.TxHash != root {
+				c.logBodyRootMismatch(hash, cache.Header.TxHash, root)
+				return cache
+			}
 			cache.Body = body
+			cache.TxRoot = root
 			header = cache.Header
 			return cache
 		})
 	}
 
 	if header != nil {
-		// Decode RawLists back to slices for creating types.Block
-		blockTxs, _ := body.Transactions.Items()
 		blockUncles, _ := body.Uncles.Items()
 		var blockWithdrawals []*types.Withdrawal
 		if body.Withdrawals != nil {
 			blockWithdrawals, _ = body.Withdrawals.Items()
 		}
-		block := types.NewBlockWithHeader(header).WithBody(types.Body{
-			Transactions: blockTxs,
-			Uncles:       blockUncles,
-			Withdrawals:  blockWithdrawals,
-		})
 		c.conns.UpdateHeadBlock(NewBlockPacket{
-			Block: block,
+			Block: assembleBlock(header, txs, blockUncles, blockWithdrawals),
 			TD:    c.conns.HeadBlock().TD,
+			Txs:   txs,
 		})
 	}
 
 	return nil
 }
 
+// assembleBlock builds the types.Block for a header and decoded body. Bor
+// state-sync transactions cannot be held by a types.Block and are left out;
+// whatever needs the whole body is given txs or the raw body instead.
+func assembleBlock(header *types.Header, txs *bortx.Body, uncles []*types.Header, withdrawals []*types.Withdrawal) *types.Block {
+	return types.NewBlockWithHeader(header).WithBody(types.Body{
+		Transactions: txs.Txs,
+		Uncles:       uncles,
+		Withdrawals:  withdrawals,
+	})
+}
+
+// blockFromRaw builds the types.Block for a decoded NewBlock, after checking its
+// transactions against the header's txRoot, which the block hash commits to.
+func blockFromRaw(raw rawBlock, txs *bortx.Body) (*types.Block, error) {
+	if root := txs.Root(); root != raw.Header.TxHash {
+		return nil, fmt.Errorf("transaction root %s does not match header %s", root.Hex(), raw.Header.TxHash.Hex())
+	}
+	return assembleBlock(raw.Header, txs, raw.Uncles, raw.Withdrawals), nil
+}
+
+// logBodyRootMismatch logs a block body dropped for not matching its header.
+func (c *conn) logBodyRootMismatch(hash, want, got common.Hash) {
+	c.logger.Warn().
+		Str("hash", hash.Hex()).
+		Str("want_tx_root", want.Hex()).
+		Str("got_tx_root", got.Hex()).
+		Msg("Dropping block body that does not match its header")
+}
+
 // buildBlockBody decodes a raw RLP block body and re-encodes it into an
-// eth.BlockBody of raw lists.
-func (c *conn) buildBlockBody(raw []byte) (*eth.BlockBody, error) {
+// eth.BlockBody of raw lists. It also returns the decoded transactions, so
+// callers do not decode the body again.
+func (c *conn) buildBlockBody(raw []byte) (*eth.BlockBody, *bortx.Body, error) {
 	var decoded rawBlockBody
 	if err := rlp.DecodeBytes(raw, &decoded); err != nil {
-		return nil, fmt.Errorf("failed to decode block body: %w", err)
+		return nil, nil, fmt.Errorf("failed to decode block body: %w", err)
 	}
 
 	txs, err := c.decodeTxsStrict(decoded.Transactions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode block body transactions: %w", err)
+		return nil, nil, fmt.Errorf("failed to decode block body transactions: %w", err)
 	}
-	txList, err := rlp.EncodeToRawList(txs)
+	body, err := newRawBlockBody(txs, decoded.Uncles, decoded.Withdrawals)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode transactions: %w", err)
+		return nil, nil, err
 	}
-	uncleList, err := rlp.EncodeToRawList(decoded.Uncles)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode uncles: %w", err)
-	}
-
-	var withdrawalList *rlp.RawList[*types.Withdrawal]
-	if decoded.Withdrawals != nil {
-		wl, err := rlp.EncodeToRawList(decoded.Withdrawals)
-		if err != nil {
-			return nil, fmt.Errorf("failed to encode withdrawals: %w", err)
-		}
-		withdrawalList = &wl
-	}
-
-	return &eth.BlockBody{
-		Transactions: txList,
-		Uncles:       uncleList,
-		Withdrawals:  withdrawalList,
-	}, nil
+	return body, txs, nil
 }
 
 func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
@@ -1319,26 +1362,31 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	// had every later tx_index shifted down -- keyed by a real block hash whose real
 	// contents differed. Both are ReplacingMergeTree, so that row could beat an
 	// honest sensor's and persist.
+	//
+	// The root is derived from the transactions as received, so Bor state-sync
+	// transactions count towards it. The types.Block holds only the transactions
+	// go-ethereum can decode; everything that must see the whole body (the
+	// serving cache, the database) is given the raw body instead.
 	txs, err := c.decodeTxsStrict(raw.Block.Txs)
 	if err != nil {
 		c.logger.Warn().Err(err).Msg("Dropping new block with undecodable transactions")
 		return nil
 	}
-	block := types.NewBlockWithHeader(raw.Block.Header).WithBody(types.Body{
-		Transactions: txs,
-		Uncles:       raw.Block.Uncles,
-		Withdrawals:  raw.Block.Withdrawals,
-	})
-	if root := types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)); root != raw.Block.Header.TxHash {
+	block, err := blockFromRaw(raw.Block, txs)
+	if err != nil {
 		c.logger.Warn().
-			Str("hash", block.Hash().Hex()).
-			Str("want_tx_root", raw.Block.Header.TxHash.Hex()).
-			Str("got_tx_root", root.Hex()).
-			Int("txs", len(txs)).
+			Err(err).
+			Str("hash", raw.Block.Header.Hash().Hex()).
+			Int("txs", len(txs.Hashes)).
 			Msg("Dropping new block whose body does not match its header")
 		return nil
 	}
-	packet := &NewBlockPacket{Block: block, TD: raw.TD}
+	// The raw body is only needed to cache or rebroadcast the block, so it is
+	// built at most once, and only if one of those happens.
+	body := sync.OnceValues(func() (*eth.BlockBody, error) {
+		return newRawBlockBody(txs, raw.Block.Uncles, raw.Block.Withdrawals)
+	})
+	packet := &NewBlockPacket{Block: block, TD: raw.TD, Txs: txs}
 
 	tfs := time.Now()
 	hash := packet.Block.Hash()
@@ -1375,7 +1423,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	// retained in the serving cache nor rebroadcast.
 	signer, known, rerr := c.conns.RecoverSigner(packet.Block.Header())
 
-	cached, err := c.cacheFullBlock(ctx, packet, hash, known, tfs)
+	cached, err := c.cacheFullBlock(ctx, packet, body, hash, known, tfs)
 	if err != nil {
 		return err
 	}
@@ -1384,7 +1432,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return nil
 	}
 
-	c.db.WriteBlock(ctx, c.node, packet.Block, packet.TD, tfs)
+	c.db.WriteBlock(ctx, c.node, packet.Block, txs, packet.TD, tfs)
 
 	// Only rebroadcast blocks signed by a known validator. Persistence above is
 	// unconditional; signer validation gates rebroadcast (and caching) only.
@@ -1396,15 +1444,25 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 			Str("peer_id", c.node.ID().String()).
 			Uint("eth_version", c.version).
 			Str("td", packet.TD.String()).
-			Int("tx_count", len(packet.Block.Transactions())).
+			Int("tx_count", len(txs.Hashes)).
 			Time("peer_connected_at", c.connectedAt).
 			AnErr("recover_err", rerr).
 			Msg("Skipping full block rebroadcast, signer not in validator set")
 		return nil
 	}
 
-	// Broadcast block or block hash to other peers asynchronously
-	go c.conns.BroadcastBlock(packet.Block, packet.TD)
+	// Broadcast block or block hash to other peers asynchronously. The full block
+	// is sent from the raw body, so Bor state-sync transactions go out intact.
+	if c.conns.shouldBroadcastBlocks {
+		go func() {
+			blockBody, encodeErr := body()
+			if encodeErr != nil {
+				c.logger.Warn().Err(encodeErr).Str("hash", hash.Hex()).Msg("Failed to encode block body for broadcast")
+				return
+			}
+			c.conns.BroadcastBlock(packet.Block, blockBody, packet.TD)
+		}()
+	}
 	go c.conns.BroadcastBlockHashes(
 		[]common.Hash{hash},
 		[]uint64{packet.Block.Number().Uint64()},
@@ -1418,12 +1476,11 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 // block was already fully cached (by a concurrent peer), so the caller can stop
 // early. Unknown-signer blocks are skipped here and recorded to the database by
 // the caller instead.
-func (c *conn) cacheFullBlock(ctx context.Context, packet *NewBlockPacket, hash common.Hash, known bool, tfs time.Time) (cached bool, err error) {
+func (c *conn) cacheFullBlock(ctx context.Context, packet *NewBlockPacket, body func() (*eth.BlockBody, error), hash common.Hash, known bool, tfs time.Time) (cached bool, err error) {
 	if !c.conns.ShouldCachePayload(known) {
 		return false, nil
 	}
-
-	blockBody, err := encodeBlockBody(packet.Block)
+	blockBody, err := body()
 	if err != nil {
 		return false, fmt.Errorf("failed to encode block body: %w", err)
 	}
@@ -1439,6 +1496,7 @@ func (c *conn) cacheFullBlock(ctx context.Context, packet *NewBlockPacket, hash 
 			Header: packet.Block.Header(),
 			Body:   blockBody,
 			TD:     packet.TD,
+			TxRoot: packet.Block.TxHash(),
 		}
 	})
 	if cached {
