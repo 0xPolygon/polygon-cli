@@ -44,8 +44,11 @@ type bodyGate struct {
 }
 
 // Defaults for the body gate when the block cache it is sized from has no limit.
-// A held body whose header never arrives is only removed by size or age, so the
-// gate always has both.
+// A held body whose header never arrives is only removed when newer blocks push
+// it out, or when it has expired and its block's entry is next touched, so the
+// gate always has a size bound and an expiry. A body whose header arrives after
+// it expired, but before it is pushed out, is still released and written: it is
+// still the right body.
 const (
 	defaultBodyGateSize = 1024
 	defaultBodyGateTTL  = 10 * time.Minute

@@ -14,12 +14,17 @@ import (
 
 // bodyRoot is a single hash over every part of a block body that its header
 // commits to: the transaction root, the uncle hash and, when the block has
-// them, the withdrawals root. A body matches its header exactly when the two
-// bodyRoots are equal, so checking it covers the uncles and withdrawals as
-// well as the transactions.
+// them, the withdrawals root. A body matches its header when the two bodyRoots
+// are equal, so checking it covers the uncles and withdrawals as well as the
+// transactions.
+//
+// No withdrawals, an empty withdrawals list and the empty withdrawals root are
+// all treated alike. Withdrawals are not stored, so this tolerates a client
+// that sends an empty list for a block whose header has no withdrawals root
+// (or the reverse) without accepting a body with different withdrawals.
 func bodyRoot(txRoot, uncleHash common.Hash, withdrawalsRoot *common.Hash) common.Hash {
 	var w common.Hash
-	if withdrawalsRoot != nil {
+	if withdrawalsRoot != nil && *withdrawalsRoot != types.EmptyWithdrawalsHash {
 		w = *withdrawalsRoot
 	}
 	return crypto.Keccak256Hash(txRoot[:], uncleHash[:], w[:])

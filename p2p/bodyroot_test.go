@@ -5,7 +5,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"github.com/0xPolygon/polygon-cli/p2p/database"
@@ -26,18 +28,35 @@ func TestBodyRootMatchesHeader(t *testing.T) {
 	if decodedBodyRoot(txs.Root(), []*types.Header{fakeUncle}, block.Withdrawals) == headerBodyRoot(block.Header) {
 		t.Fatal("a body with an added uncle matches the header")
 	}
-	if decodedBodyRoot(txs.Root(), block.Uncles, []*types.Withdrawal{}) == headerBodyRoot(block.Header) {
+	withdrawals := []*types.Withdrawal{{Index: 1, Validator: 2, Address: common.Address{3}, Amount: 4}}
+	if decodedBodyRoot(txs.Root(), block.Uncles, withdrawals) == headerBodyRoot(block.Header) {
 		t.Fatal("a body with withdrawals matches a header without a withdrawals root")
 	}
 
-	withWithdrawals := types.CopyHeader(block.Header)
+	// No withdrawals, an empty list and the empty withdrawals root are alike.
+	if decodedBodyRoot(txs.Root(), block.Uncles, []*types.Withdrawal{}) != headerBodyRoot(block.Header) {
+		t.Fatal("an empty withdrawals list does not match a header without a withdrawals root")
+	}
+	emptyRoot := types.CopyHeader(block.Header)
 	empty := types.EmptyWithdrawalsHash
-	withWithdrawals.WithdrawalsHash = &empty
-	if decodedBodyRoot(txs.Root(), block.Uncles, []*types.Withdrawal{}) != headerBodyRoot(withWithdrawals) {
+	emptyRoot.WithdrawalsHash = &empty
+	if decodedBodyRoot(txs.Root(), block.Uncles, []*types.Withdrawal{}) != headerBodyRoot(emptyRoot) {
 		t.Fatal("an empty withdrawals list does not match the empty withdrawals root")
 	}
-	if decodedBodyRoot(txs.Root(), block.Uncles, nil) == headerBodyRoot(withWithdrawals) {
+
+	// Real withdrawals are checked exactly.
+	withRoot := types.CopyHeader(block.Header)
+	root := types.DeriveSha(types.Withdrawals(withdrawals), trie.NewStackTrie(nil))
+	withRoot.WithdrawalsHash = &root
+	if decodedBodyRoot(txs.Root(), block.Uncles, withdrawals) != headerBodyRoot(withRoot) {
+		t.Fatal("matching withdrawals do not match the header")
+	}
+	if decodedBodyRoot(txs.Root(), block.Uncles, nil) == headerBodyRoot(withRoot) {
 		t.Fatal("a body without withdrawals matches a header with a withdrawals root")
+	}
+	other := []*types.Withdrawal{{Index: 1, Validator: 2, Address: common.Address{3}, Amount: 5}}
+	if decodedBodyRoot(txs.Root(), block.Uncles, other) == headerBodyRoot(withRoot) {
+		t.Fatal("different withdrawals match the header")
 	}
 }
 

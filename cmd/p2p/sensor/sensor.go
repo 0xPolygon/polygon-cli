@@ -109,6 +109,10 @@ var (
 	//go:embed usage.md
 	sensorUsage       string
 	inputSensorParams sensorParams
+
+	// Bound to the deprecated Datastore flags, which are accepted and ignored.
+	deprecatedProjectID, deprecatedDatabaseID string
+	deprecatedTTL                             time.Duration
 )
 
 // SensorCmd represents the sensor command. This is responsible for starting a
@@ -568,8 +572,8 @@ func init() {
 	flag.MarkFlagsRequired(SensorCmd, "network-id")
 	// The Datastore backend is retired and --database=datastore is rejected.
 	// These flags only applied to it; they are deprecated and ignored.
-	f.StringP("project-id", "p", "", "GCP project ID")
-	f.StringP("database-id", "d", "", "datastore database ID")
+	f.StringVarP(&deprecatedProjectID, "project-id", "p", "", "GCP project ID")
+	f.StringVarP(&deprecatedDatabaseID, "database-id", "d", "", "datastore database ID")
 	flag.MarkDeprecated(SensorCmd, "project-id", "the Datastore backend is retired; use --database=clickhouse")
 	flag.MarkDeprecated(SensorCmd, "database-id", "the Datastore backend is retired; use --database=clickhouse")
 	f.StringVar(&inputSensorParams.ClickHouseDSN, "clickhouse-dsn", "",
@@ -638,7 +642,7 @@ intrinsic gas, fees); rejected transactions are still cached and written to the 
 	f.StringVar(&inputSensorParams.NAT, "nat", "any", "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
 	f.StringVar(&inputSensorParams.StaticNodesFile, "static-nodes", "", "static nodes file")
 	f.StringVar(&inputSensorParams.TrustedNodesFile, "trusted-nodes", "", "trusted nodes file")
-	f.Duration("ttl", 14*24*time.Hour, "time to live")
+	f.DurationVar(&deprecatedTTL, "ttl", 14*24*time.Hour, "time to live")
 	flag.MarkDeprecated(SensorCmd, "ttl", "it only applied to the retired Datastore backend")
 	f.StringVar(&inputSensorParams.DiscoveryDNS, "discovery-dns", "", "DNS discovery ENR tree URL")
 	f.StringVar(&inputSensorParams.Database, "database", "none",

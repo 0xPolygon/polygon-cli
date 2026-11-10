@@ -20,6 +20,9 @@ type (
 
 var (
 	inputNodeListParams nodeListParams
+
+	// Bound to the deprecated Datastore flags, which are accepted and ignored.
+	deprecatedProjectID, deprecatedDatabaseID string
 )
 
 var NodeListCmd = &cobra.Command{
@@ -63,8 +66,8 @@ func init() {
 	// The Datastore backend is retired. Its flags are deprecated and ignored,
 	// registered only so existing invocations get a deprecation warning rather
 	// than an unknown-flag error.
-	f.StringP("project-id", "p", "", "GCP project ID")
-	f.StringP("database-id", "d", "", "datastore database ID")
+	f.StringVarP(&deprecatedProjectID, "project-id", "p", "", "GCP project ID")
+	f.StringVarP(&deprecatedDatabaseID, "database-id", "d", "", "datastore database ID")
 	flag.MarkDeprecated(NodeListCmd, "project-id", "the Datastore backend is retired; use --clickhouse-dsn")
 	flag.MarkDeprecated(NodeListCmd, "database-id", "the Datastore backend is retired; use --clickhouse-dsn")
 }
