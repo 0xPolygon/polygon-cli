@@ -619,12 +619,16 @@ func (c *ClickHouse) WriteBlockBodyArrival(ctx context.Context, ann BlockAnnounc
 
 func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 	if c.conn == nil {
-		// block_bodies plus one block_txs row per transaction, and one
-		// transactions row per transaction that is not a Bor state-sync one,
-		// counting only the tables this sensor writes.
+		// block_bodies (skipped below when the uncles do not decode) plus one
+		// block_txs row per transaction, and one transactions row per transaction
+		// that is not a Bor state-sync one, counting only the tables this sensor
+		// writes.
 		var n uint64
 		if c.shouldWriteBlocks {
-			n += 1 + uint64(len(txs.Hashes))
+			n += uint64(len(txs.Hashes))
+			if _, err := body.Uncles.Items(); err == nil {
+				n++
+			}
 		}
 		if c.shouldWriteTransactions {
 			n += uint64(len(txs.Txs))

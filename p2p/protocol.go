@@ -1413,9 +1413,13 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	// transactions count towards it. The types.Block holds only the transactions
 	// go-ethereum can decode; everything that must see the whole body (the
 	// serving cache, the database) is given the raw body instead.
+	//
+	// The header is genuine even when the body is not -- its hash is the block
+	// hash -- so a dropped NewBlock still releases any body held for the block.
 	txs, err := c.decodeTxsStrict(raw.Block.Txs)
 	if err != nil {
 		c.logger.Warn().Err(err).Msg("Dropping new block with undecodable transactions")
+		c.releasePendingBody(ctx, raw.Block.Header)
 		return nil
 	}
 	block, err := blockFromRaw(raw.Block, txs)
@@ -1425,6 +1429,7 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 			Str("hash", raw.Block.Header.Hash().Hex()).
 			Int("txs", len(txs.Hashes)).
 			Msg("Dropping new block whose body does not match its header")
+		c.releasePendingBody(ctx, raw.Block.Header)
 		return nil
 	}
 	// The raw body is only needed to cache or rebroadcast the block, so it is

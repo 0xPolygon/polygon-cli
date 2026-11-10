@@ -49,6 +49,10 @@ func TestDiscardedCountsOnlyEnabledRows(t *testing.T) {
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx1, tx2}})
 	txs := txsOf(t, block)
 	body := &eth.BlockBody{}
+	badUncles := &eth.BlockBody{}
+	if err := badUncles.Uncles.AppendRaw([]byte{0x01}); err != nil {
+		t.Fatal(err)
+	}
 	ann := BlockAnnouncement{Hash: block.Hash(), Number: 1}
 	anns := []BlockAnnouncement{ann, ann, ann}
 	hashes := []common.Hash{{1}, {2}}
@@ -83,6 +87,8 @@ func TestDiscardedCountsOnlyEnabledRows(t *testing.T) {
 		{"body blocks only", chFlags{blocks: true}, func(c *ClickHouse) { c.WriteBlockBody(ctx, body, txs, ann, now) }, 3},
 		{"body txs only", chFlags{txs: true}, func(c *ClickHouse) { c.WriteBlockBody(ctx, body, txs, ann, now) }, 2},
 		{"body all off", chFlags{}, func(c *ClickHouse) { c.WriteBlockBody(ctx, body, txs, ann, now) }, 0},
+		// Undecodable uncles skip only the block_bodies row.
+		{"body bad uncles", allOn, func(c *ClickHouse) { c.WriteBlockBody(ctx, badUncles, txs, ann, now) }, 2 + 2},
 
 		// WriteBlockEvents and WriteTransactionEvents: one row per item, none
 		// without a peer.

@@ -524,3 +524,36 @@ func TestNewBlockDoesNotRewriteHeldBody(t *testing.T) {
 		t.Fatal("the held body was left in the gate")
 	}
 }
+
+// TestDroppedNewBlockReleasesHeldBody is the regression test for a NewBlock
+// whose body does not match its header returning before it released the body
+// held for that block. The header is genuine, so the held body must still be
+// checked against it and written.
+func TestDroppedNewBlockReleasesHeldBody(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	hash := block.Header.Hash()
+	conns := sharedTestConns(t, false)
+	useFreshBodyGate(t, conns)
+	conns.Blocks().Remove(hash)
+	t.Cleanup(func() { conns.Blocks().Remove(hash) })
+
+	c := newTestConn(&recordRW{}, conns)
+	db := &blockWriteDB{Database: database.NoDatabase()}
+	c.db = db
+	c.requests.Add(9, database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()})
+	if err := c.handleBlockBodies(context.Background(), blockBodiesMsg(t, 9, block.Txs, block.Uncles)); err != nil {
+		t.Fatalf("handleBlockBodies: %v", err)
+	}
+	tampered := block
+	tampered.Txs = block.Txs[1:]
+	msg := encodeMsg(t, eth.NewBlockMsg, &rawNewBlockPacket{Block: tampered, TD: big.NewInt(1)})
+	if err := c.handleNewBlock(context.Background(), msg); err != nil {
+		t.Fatalf("handleNewBlock: %v", err)
+	}
+	if db.block != nil {
+		t.Fatal("wrote a NewBlock whose body does not match its header")
+	}
+	if db.bodyWrites != 1 || len(db.txs.Hashes) != len(block.Txs) {
+		t.Fatalf("body writes = %d, want the held body written once", db.bodyWrites)
+	}
+}

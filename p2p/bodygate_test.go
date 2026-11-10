@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -101,5 +102,23 @@ func TestBodyGateBoundsBodiesPerBlock(t *testing.T) {
 	}
 	if len(dropped) != maxPendingBodiesPerBlock-1 {
 		t.Fatalf("held %d other bodies, want %d", len(dropped), maxPendingBodiesPerBlock-1)
+	}
+}
+
+// TestBodyGateRepeatDoesNotExtendExpiry is the regression test for a repeat
+// body re-adding its block's entry: that reset the entry's expiry, so peers
+// resending bodies for a block whose header never arrived kept it alive.
+func TestBodyGateRepeatDoesNotExtendExpiry(t *testing.T) {
+	const ttl = 200 * time.Millisecond
+	g := newBodyGate(ds.LRUOptions{MaxSize: 16, TTL: ttl})
+	hash, root := common.Hash{1}, common.Hash{2}
+
+	g.bodyArrived(hash, pendingBody{root: root})
+	time.Sleep(ttl / 2)
+	g.bodyArrived(hash, pendingBody{root: root})
+	g.bodyArrived(hash, pendingBody{root: common.Hash{3}})
+	time.Sleep(ttl/2 + ttl/4)
+	if _, ok := g.pending.Peek(hash); ok {
+		t.Fatal("repeat bodies extended the held entry past its expiry")
 	}
 }

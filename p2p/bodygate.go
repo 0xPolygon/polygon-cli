@@ -62,12 +62,14 @@ func (g *bodyGate) bodyArrived(hash common.Hash, body pendingBody) (common.Hash,
 	}
 	held, ok := g.pending.Peek(hash)
 	if !ok {
-		held = make(map[common.Hash]pendingBody, 1)
+		g.pending.Add(hash, map[common.Hash]pendingBody{body.root: body})
+		return common.Hash{}, false
 	}
+	// Added to the block's existing entry in place, without re-adding it, so a
+	// repeat or rejected body does not reset the entry's expiry or LRU position.
 	if _, dup := held[body.root]; !dup && len(held) < maxPendingBodiesPerBlock {
 		held[body.root] = body
 	}
-	g.pending.Add(hash, held)
 	return common.Hash{}, false
 }
 
