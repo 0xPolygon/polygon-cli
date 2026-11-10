@@ -132,6 +132,16 @@ The tool supports configuration via:
 ## Development Guidelines
 
 - Use conventional commit messages
+- Mark breaking changes with `!` in the commit/PR title (e.g. `chore(sensor)!: ...`) and a `BREAKING CHANGE:` footer describing what users must change
+
+### Pull Request Descriptions
+
+This repository is public. Write PR descriptions, commit messages, and code comments for an external audience:
+
+- State what changed and why in terms of polycli's behavior; keep it short (a summary, a bullet list of changes, breaking changes, and how it was tested)
+- Do not include internal context: Polygon infrastructure or deployment details (hosts, startup scripts, fleet rollouts, costs), internal Slack/Jira/Confluence links or ticket IDs, names of internal services or dashboards, incident details, or private discussions
+- Do not narrate the review history (e.g. "addresses review findings", "round 3 fixes") or the stacking/merge mechanics of related PRs
+- Describe tests by what they cover, not by the internal environment they ran in
 
 ## Development Memories
 
