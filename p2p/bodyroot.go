@@ -30,15 +30,17 @@ func headerBodyRoot(h *types.Header) common.Hash {
 	return bodyRoot(h.TxHash, h.UncleHash, h.WithdrawalsHash)
 }
 
-// decodedBodyRoot is the bodyRoot of a decoded body. Withdrawals count only when
-// the body carries a withdrawals list, as a header's withdrawals root does.
-func decodedBodyRoot(txs *bortx.Body, uncles []*types.Header, withdrawals []*types.Withdrawal) common.Hash {
+// decodedBodyRoot is the bodyRoot of a decoded body, given its transaction root
+// (bortx.Body.Root), which callers that have already derived it pass in rather
+// than hash every transaction again. Withdrawals count only when the body
+// carries a withdrawals list, as a header's withdrawals root does.
+func decodedBodyRoot(txRoot common.Hash, uncles []*types.Header, withdrawals []*types.Withdrawal) common.Hash {
 	var w *common.Hash
 	if withdrawals != nil {
 		root := types.DeriveSha(types.Withdrawals(withdrawals), trie.NewStackTrie(nil))
 		w = &root
 	}
-	return bodyRoot(txs.Root(), types.CalcUncleHash(uncles), w)
+	return bodyRoot(txRoot, types.CalcUncleHash(uncles), w)
 }
 
 // rawBodyRoot is the bodyRoot of a body whose uncles and withdrawals are still
@@ -57,5 +59,5 @@ func rawBodyRoot(body *eth.BlockBody, txs *bortx.Body) (common.Hash, error) {
 			withdrawals = []*types.Withdrawal{}
 		}
 	}
-	return decodedBodyRoot(txs, uncles, withdrawals), nil
+	return decodedBodyRoot(txs.Root(), uncles, withdrawals), nil
 }

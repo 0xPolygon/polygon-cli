@@ -829,7 +829,7 @@ func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 func ClickHouseNodeList(ctx context.Context, dsn string, limit int) ([]string, error) {
 	conn, err := openClickHouse(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("connect to ClickHouse: %w", err)
+		return nil, err
 	}
 	defer func() {
 		if err := conn.Close(); err != nil {
@@ -837,7 +837,7 @@ func ClickHouseNodeList(ctx context.Context, dsn string, limit int) ([]string, e
 		}
 	}()
 	if err := conn.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("connect to ClickHouse: %w", err)
+		return nil, fmt.Errorf("ping ClickHouse: %w", err)
 	}
 	return (&ClickHouse{conn: conn}).NodeList(ctx, limit)
 }

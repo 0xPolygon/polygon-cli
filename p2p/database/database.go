@@ -72,8 +72,8 @@ type Database interface {
 	// WriteBlockBody writes the facts of a block body: its transaction count and
 	// ordered transactions (the block row itself comes from WriteBlock or
 	// WriteBlockHeaders). It is only called with a body checked against its
-	// header's txRoot, so tfs, when the body arrived, may be well before the
-	// call. ClickHouse writes the body facts if ShouldWriteBlocks and the
+	// header -- transactions, uncles and withdrawals -- so tfs, when the body
+	// arrived, may be well before the call. ClickHouse writes the body facts if ShouldWriteBlocks and the
 	// transactions if ShouldWriteTransactions.
 	WriteBlockBody(context.Context, *eth.BlockBody, *bortx.Body, BlockAnnouncement, time.Time)
 

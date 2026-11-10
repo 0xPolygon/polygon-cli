@@ -159,8 +159,8 @@ func TestNodeListWithoutConnection(t *testing.T) {
 		t.Fatalf("NodeList = %v, %v; want an empty list", nodes, err)
 	}
 	_, err = ClickHouseNodeList(ctx, "clickhouse://127.0.0.1:1/nope", 10)
-	if err == nil || !strings.Contains(err.Error(), "connect to ClickHouse") {
-		t.Fatalf("ClickHouseNodeList against an unreachable server = %v, want a connect error", err)
+	if err == nil || !strings.Contains(err.Error(), "ping ClickHouse") {
+		t.Fatalf("ClickHouseNodeList against an unreachable server = %v, want a ping error", err)
 	}
 	if _, err := ClickHouseNodeList(ctx, "not a dsn", 10); err == nil {
 		t.Fatal("ClickHouseNodeList succeeded with an invalid DSN")

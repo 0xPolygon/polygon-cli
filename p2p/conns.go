@@ -164,7 +164,7 @@ func NewConns(opts ConnsOptions) *Conns {
 	c := &Conns{
 		conns:                      make(map[string]*conn),
 		blocks:                     ds.NewLRU[common.Hash, BlockCache](opts.BlocksCache),
-		bodies:                     newBodyGate(opts.BlocksCache),
+		bodies:                     newBodyGate(bodyGateOptions(opts.BlocksCache)),
 		txs:                        ds.NewLRU[common.Hash, *types.Transaction](opts.TxsCache),
 		announcedTxs:               ds.NewLRU[common.Hash, struct{}](opts.TxsCache),
 		knownTxsBloom:              opts.KnownTxsBloom,

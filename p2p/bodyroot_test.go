@@ -20,23 +20,23 @@ func TestBodyRootMatchesHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decodedBodyRoot(txs, block.Uncles, block.Withdrawals) != headerBodyRoot(block.Header) {
+	if decodedBodyRoot(txs.Root(), block.Uncles, block.Withdrawals) != headerBodyRoot(block.Header) {
 		t.Fatal("the real body does not match its header")
 	}
-	if decodedBodyRoot(txs, []*types.Header{fakeUncle}, block.Withdrawals) == headerBodyRoot(block.Header) {
+	if decodedBodyRoot(txs.Root(), []*types.Header{fakeUncle}, block.Withdrawals) == headerBodyRoot(block.Header) {
 		t.Fatal("a body with an added uncle matches the header")
 	}
-	if decodedBodyRoot(txs, block.Uncles, []*types.Withdrawal{}) == headerBodyRoot(block.Header) {
+	if decodedBodyRoot(txs.Root(), block.Uncles, []*types.Withdrawal{}) == headerBodyRoot(block.Header) {
 		t.Fatal("a body with withdrawals matches a header without a withdrawals root")
 	}
 
 	withWithdrawals := types.CopyHeader(block.Header)
 	empty := types.EmptyWithdrawalsHash
 	withWithdrawals.WithdrawalsHash = &empty
-	if decodedBodyRoot(txs, block.Uncles, []*types.Withdrawal{}) != headerBodyRoot(withWithdrawals) {
+	if decodedBodyRoot(txs.Root(), block.Uncles, []*types.Withdrawal{}) != headerBodyRoot(withWithdrawals) {
 		t.Fatal("an empty withdrawals list does not match the empty withdrawals root")
 	}
-	if decodedBodyRoot(txs, block.Uncles, nil) == headerBodyRoot(withWithdrawals) {
+	if decodedBodyRoot(txs.Root(), block.Uncles, nil) == headerBodyRoot(withWithdrawals) {
 		t.Fatal("a body without withdrawals matches a header with a withdrawals root")
 	}
 }

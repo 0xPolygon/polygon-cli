@@ -60,10 +60,9 @@ func init() {
 	f.StringVar(&inputNodeListParams.ClickHouseDSN, "clickhouse-dsn", "",
 		"ClickHouse DSN of the sensor database to read peers from, e.g. clickhouse://user:pass@host:9000/mainnet")
 	flag.MarkFlagsRequired(NodeListCmd, "clickhouse-dsn")
-	// The Datastore backend is retired. Its flags are still accepted so existing
-	// invocations keep parsing, but they do nothing.
-	// Deprecated and ignored; registered only so existing invocations get a
-	// deprecation warning rather than an unknown-flag error.
+	// The Datastore backend is retired. Its flags are deprecated and ignored,
+	// registered only so existing invocations get a deprecation warning rather
+	// than an unknown-flag error.
 	f.StringP("project-id", "p", "", "GCP project ID")
 	f.StringP("database-id", "d", "", "datastore database ID")
 	flag.MarkDeprecated(NodeListCmd, "project-id", "the Datastore backend is retired; use --clickhouse-dsn")

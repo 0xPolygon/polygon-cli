@@ -1343,10 +1343,11 @@ func assembleBlock(header *types.Header, txs *bortx.Body, uncles []*types.Header
 // transactions, uncles and withdrawals against the header, which the block hash
 // commits to.
 func blockFromRaw(raw rawBlock, txs *bortx.Body) (*types.Block, error) {
-	if root := txs.Root(); root != raw.Header.TxHash {
-		return nil, fmt.Errorf("transaction root %s does not match header %s", root.Hex(), raw.Header.TxHash.Hex())
+	txRoot := txs.Root()
+	if txRoot != raw.Header.TxHash {
+		return nil, fmt.Errorf("transaction root %s does not match header %s", txRoot.Hex(), raw.Header.TxHash.Hex())
 	}
-	if decodedBodyRoot(txs, raw.Uncles, raw.Withdrawals) != headerBodyRoot(raw.Header) {
+	if decodedBodyRoot(txRoot, raw.Uncles, raw.Withdrawals) != headerBodyRoot(raw.Header) {
 		return nil, errors.New("uncles or withdrawals do not match header")
 	}
 	return assembleBlock(raw.Header, txs, raw.Uncles, raw.Withdrawals), nil

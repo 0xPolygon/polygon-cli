@@ -43,6 +43,27 @@ type bodyGate struct {
 	pending *ds.LRU[common.Hash, map[common.Hash]pendingBody]
 }
 
+// Defaults for the body gate when the block cache it is sized from has no limit.
+// A held body whose header never arrives is only removed by size or age, so the
+// gate always has both.
+const (
+	defaultBodyGateSize = 1024
+	defaultBodyGateTTL  = 10 * time.Minute
+)
+
+// bodyGateOptions sizes the gate like the block cache, filling in a size and an
+// expiry where the block cache has none.
+func bodyGateOptions(blocks ds.LRUOptions) ds.LRUOptions {
+	opts := blocks
+	if opts.MaxSize <= 0 {
+		opts.MaxSize = defaultBodyGateSize
+	}
+	if opts.TTL <= 0 {
+		opts.TTL = defaultBodyGateTTL
+	}
+	return opts
+}
+
 func newBodyGate(opts ds.LRUOptions) *bodyGate {
 	return &bodyGate{
 		roots:   ds.NewLRU[common.Hash, common.Hash](opts),

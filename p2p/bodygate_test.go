@@ -122,3 +122,17 @@ func TestBodyGateRepeatDoesNotExtendExpiry(t *testing.T) {
 		t.Fatal("repeat bodies extended the held entry past its expiry")
 	}
 }
+
+// TestBodyGateAlwaysBounded checks that the gate has a size and an expiry even
+// when the block cache it is sized from has neither, since a held body whose
+// header never arrives is only removed by size or age.
+func TestBodyGateAlwaysBounded(t *testing.T) {
+	got := bodyGateOptions(ds.LRUOptions{})
+	if got.MaxSize != defaultBodyGateSize || got.TTL != defaultBodyGateTTL {
+		t.Fatalf("unbounded block cache gave gate options %+v", got)
+	}
+	want := ds.LRUOptions{MaxSize: 7, TTL: time.Minute}
+	if got := bodyGateOptions(want); got != want {
+		t.Fatalf("bounded block cache gave gate options %+v, want %+v", got, want)
+	}
+}
