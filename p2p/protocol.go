@@ -1616,6 +1616,12 @@ func (c *conn) handleGetPooledTransactions(msg ethp2p.Msg) error {
 	return ethp2p.Send(c.rw, eth.PooledTransactionsMsg, response)
 }
 
+// maxPooledTxsPerRequest is the largest GetPooledTransactions request Bor
+// serves. Bor (maxPooledTxsServe in eth/protocols/eth/handler.go, since
+// 0xPolygon/bor#2418) disconnects a peer that sends a larger one, and
+// go-ethereum's own tx fetcher never asks for more than 256 hashes at a time.
+const maxPooledTxsPerRequest = 256
+
 func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uint, msg ethp2p.Msg) error {
 	var hashes []common.Hash
 	var name string
@@ -1670,9 +1676,19 @@ func (c *conn) handleNewPooledTransactionHashes(ctx context.Context, version uin
 		return nil
 	}
 
-	request := &eth.GetPooledTransactionsPacket{GetPooledTransactionsRequest: unknown}
-	c.countMsgSent(request.Name(), float64(len(unknown)))
-	return ethp2p.Send(c.rw, eth.GetPooledTransactionsMsg, request)
+	// Bor disconnects a peer whose GetPooledTransactions request holds more
+	// than maxPooledTxsPerRequest hashes, and its peers announce up to 16384
+	// hashes at once, so split the request.
+	for len(unknown) > 0 {
+		n := min(len(unknown), maxPooledTxsPerRequest)
+		request := &eth.GetPooledTransactionsPacket{GetPooledTransactionsRequest: unknown[:n]}
+		c.countMsgSent(request.Name(), float64(n))
+		if err := ethp2p.Send(c.rw, eth.GetPooledTransactionsMsg, request); err != nil {
+			return err
+		}
+		unknown = unknown[n:]
+	}
+	return nil
 }
 
 func (c *conn) handlePooledTransactions(ctx context.Context, msg ethp2p.Msg) error {
