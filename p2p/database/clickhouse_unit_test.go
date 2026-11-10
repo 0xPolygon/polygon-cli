@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,8 +152,9 @@ func TestNodeListWithoutConnection(t *testing.T) {
 	if err != nil || len(nodes) != 0 {
 		t.Fatalf("NodeList = %v, %v; want an empty list", nodes, err)
 	}
-	if _, err := ClickHouseNodeList(ctx, "clickhouse://127.0.0.1:1/nope", 10); err == nil {
-		t.Fatal("ClickHouseNodeList succeeded against an unreachable server")
+	_, err = ClickHouseNodeList(ctx, "clickhouse://127.0.0.1:1/nope", 10)
+	if err == nil || !strings.Contains(err.Error(), "connect to ClickHouse") {
+		t.Fatalf("ClickHouseNodeList against an unreachable server = %v, want a connect error", err)
 	}
 	if _, err := ClickHouseNodeList(ctx, "not a dsn", 10); err == nil {
 		t.Fatal("ClickHouseNodeList succeeded with an invalid DSN")

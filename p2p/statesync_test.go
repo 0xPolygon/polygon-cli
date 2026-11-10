@@ -58,6 +58,10 @@ func (d *blockWriteDB) WriteBlock(_ context.Context, _ *enode.Node, block *types
 	d.txs = txs
 }
 
+// ShouldWriteBlocks reports true: blockWriteDB stands in for a database that
+// stores blocks, so the handlers hold and write bodies for it.
+func (d *blockWriteDB) ShouldWriteBlocks() bool { return true }
+
 func (d *blockWriteDB) WriteBlockBody(_ context.Context, _ *eth.BlockBody, txs *bortx.Body, _ database.BlockAnnouncement, tfs time.Time) {
 	d.txs = txs
 	d.bodyWrites++
@@ -464,5 +468,59 @@ func TestHeldBodyIsWrittenWhenNewBlockHandlerFailsEarly(t *testing.T) {
 	}
 	if db.bodyWrites != 1 {
 		t.Fatalf("body writes = %d, want the held body written once", db.bodyWrites)
+	}
+}
+
+// TestBodyIsNotHeldWhenNothingWritesIt checks that a body arriving before its
+// header is not held when the database writes neither blocks nor transactions,
+// since holding it would only use memory.
+func TestBodyIsNotHeldWhenNothingWritesIt(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	hash := block.Header.Hash()
+	conns := sharedTestConns(t, false)
+	useFreshBodyGate(t, conns)
+	conns.Blocks().Remove(hash)
+	t.Cleanup(func() { conns.Blocks().Remove(hash) })
+
+	c := newTestConn(&recordRW{}, conns)
+	c.requests.Add(5, database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()})
+	if err := c.handleBlockBodies(context.Background(), blockBodiesMsg(t, 5, block.Txs, block.Uncles)); err != nil {
+		t.Fatalf("handleBlockBodies: %v", err)
+	}
+	if _, held := conns.bodies.pending.Peek(hash); held {
+		t.Fatal("held a body for a database that does not write it")
+	}
+}
+
+// TestNewBlockDoesNotRewriteHeldBody checks that when a NewBlock arrives for a
+// block whose body is held, only the NewBlock's write happens: the held body is
+// not written as well.
+func TestNewBlockDoesNotRewriteHeldBody(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	hash := block.Header.Hash()
+	conns := sharedTestConns(t, false)
+	useFreshBodyGate(t, conns)
+	conns.Blocks().Remove(hash)
+	t.Cleanup(func() { conns.Blocks().Remove(hash) })
+
+	c := newTestConn(&recordRW{}, conns)
+	db := &blockWriteDB{Database: database.NoDatabase()}
+	c.db = db
+	c.requests.Add(6, database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()})
+	if err := c.handleBlockBodies(context.Background(), blockBodiesMsg(t, 6, block.Txs, block.Uncles)); err != nil {
+		t.Fatalf("handleBlockBodies: %v", err)
+	}
+	msg := encodeMsg(t, eth.NewBlockMsg, &rawNewBlockPacket{Block: block, TD: big.NewInt(1)})
+	if err := c.handleNewBlock(context.Background(), msg); err != nil {
+		t.Fatalf("handleNewBlock: %v", err)
+	}
+	if db.block == nil {
+		t.Fatal("the NewBlock was not written")
+	}
+	if db.bodyWrites != 0 {
+		t.Fatalf("held body written %d times as well as the NewBlock", db.bodyWrites)
+	}
+	if _, held := conns.bodies.pending.Peek(hash); held {
+		t.Fatal("the held body was left in the gate")
 	}
 }

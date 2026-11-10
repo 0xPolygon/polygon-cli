@@ -1257,7 +1257,13 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	if inCache && cached.Header != nil {
 		c.releasePendingBody(ctx, cached.Header)
 	}
-	want, known := c.conns.bodies.bodyArrived(hash, pendingBody{body: body, txs: txs, ann: ann, tfs: tfs, root: root})
+	// A body is only held for the database, so there is nothing to hold when
+	// neither its facts nor its transactions are written.
+	writesBody := c.db.ShouldWriteBlocks() || c.db.ShouldWriteTransactions()
+	want, known := common.Hash{}, false
+	if writesBody {
+		want, known = c.conns.bodies.bodyArrived(hash, pendingBody{body: body, txs: txs, ann: ann, tfs: tfs, root: root})
+	}
 	if known {
 		if root != want {
 			c.logBodyRootMismatch(hash, want, root)
@@ -1334,14 +1340,21 @@ func blockFromRaw(raw rawBlock, txs *bortx.Body) (*types.Block, error) {
 // before it, if there is one and it matches. A body that does not match is
 // dropped unwritten.
 func (c *conn) releasePendingBody(ctx context.Context, header *types.Header) {
+	if pending, ok := c.takePendingBody(header); ok {
+		c.db.WriteBlockBody(ctx, pending.body, pending.txs, pending.ann, pending.tfs)
+	}
+}
+
+// takePendingBody records a header's txRoot and returns the held body that
+// matches it, if any, leaving the write to the caller. Held bodies that do not
+// match are dropped.
+func (c *conn) takePendingBody(header *types.Header) (pendingBody, bool) {
 	hash := header.Hash()
 	pending, ok, dropped := c.conns.bodies.headerSeen(hash, header.TxHash)
 	for _, root := range dropped {
 		c.logBodyRootMismatch(hash, header.TxHash, root)
 	}
-	if ok {
-		c.db.WriteBlockBody(ctx, pending.body, pending.txs, pending.ann, pending.tfs)
-	}
+	return pending, ok
 }
 
 // logBodyRootMismatch logs a block body dropped for not matching its header.
@@ -1424,9 +1437,16 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	tfs := time.Now()
 	hash := packet.Block.Hash()
 
-	// Release a body for this block that arrived before its header. It is written
-	// now if it matches, so it is not lost if this handler returns early below.
-	c.releasePendingBody(ctx, packet.Block.Header())
+	// Take any body for this block that arrived before its header. The NewBlock's
+	// own body is written below, so the held one is only written if this handler
+	// returns before that.
+	pending, hasPending := c.takePendingBody(packet.Block.Header())
+	written := false
+	defer func() {
+		if hasPending && !written {
+			c.db.WriteBlockBody(ctx, pending.body, pending.txs, pending.ann, pending.tfs)
+		}
+	}()
 
 	c.countMsgReceived(packet.Name(), 1)
 
@@ -1465,11 +1485,14 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 		return err
 	}
 	if cached {
-		// Already fully cached by a concurrent peer; nothing more to do.
+		// Already fully cached by a concurrent peer, whose handler writes the
+		// block; nothing more to do.
+		written = true
 		return nil
 	}
 
 	c.db.WriteBlock(ctx, c.node, packet.Block, txs, packet.TD, tfs)
+	written = true
 
 	// Only rebroadcast blocks signed by a known validator. Persistence above is
 	// unconditional; signer validation gates rebroadcast (and caching) only.

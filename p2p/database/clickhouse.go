@@ -228,6 +228,26 @@ func (c *ClickHouse) Close() error {
 // surface an unreachable backend in the logs; the ping result does not gate the
 // returned connection, so a nil error does not mean ClickHouse is reachable.
 func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
+	conn, err := openClickHouse(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Diagnostic, not fatal. Open does no I/O -- the pool dials lazily and replaces
+	// broken connections, and every flush already retries (newInsertBatcher) -- so a
+	// backend that is not up *yet* recovers once it is. Failing here instead returns
+	// a no-op instance that nothing reconnects, which discarded every row when the
+	// sensors started before ClickHouse finished binding.
+	if err := conn.Ping(ctx); err != nil {
+		log.Warn().Err(err).
+			Msg("Could not ping ClickHouse at startup; continuing, the connection pool will retry on first write")
+	}
+	return conn, nil
+}
+
+// openClickHouse parses dsn, applies the writer defaults it omits, and opens a
+// connection pool. Open does no I/O, so the pool is not known to be reachable.
+func openClickHouse(dsn string) (driver.Conn, error) {
 	chOpts, err := clickhouse.ParseDSN(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse ClickHouse DSN: %w", err)
@@ -256,16 +276,6 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 	conn, err := clickhouse.Open(chOpts)
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to ClickHouse: %w", err)
-	}
-
-	// Diagnostic, not fatal. Open does no I/O -- the pool dials lazily and replaces
-	// broken connections, and every flush already retries (newInsertBatcher) -- so a
-	// backend that is not up *yet* recovers once it is. Failing here instead returns
-	// a no-op instance that nothing reconnects, which discarded every row on a whole
-	// sensor fleet that started 12s before ClickHouse finished binding.
-	if err := conn.Ping(ctx); err != nil {
-		log.Warn().Err(err).
-			Msg("Could not ping ClickHouse at startup; continuing, the connection pool will retry on first write")
 	}
 	return conn, nil
 }
@@ -811,7 +821,7 @@ func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 // it cannot connect so the sensor keeps running, it fails, so an unreachable
 // database is not mistaken for an empty node list.
 func ClickHouseNodeList(ctx context.Context, dsn string, limit int) ([]string, error) {
-	conn, err := connectClickHouse(ctx, dsn)
+	conn, err := openClickHouse(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("connect to ClickHouse: %w", err)
 	}
@@ -820,6 +830,9 @@ func ClickHouseNodeList(ctx context.Context, dsn string, limit int) ([]string, e
 			log.Error().Err(err).Msg("Failed to close ClickHouse connection")
 		}
 	}()
+	if err := conn.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("connect to ClickHouse: %w", err)
+	}
 	return (&ClickHouse{conn: conn}).NodeList(ctx, limit)
 }
 
@@ -840,17 +853,18 @@ func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) 
 		}
 	}()
 
+	// A node list is returned whole or not at all, so a row that cannot be read
+	// fails the call rather than silently shortening the list.
 	nodelist := []string{}
 	for rows.Next() {
-		var peerID string
-		if err := rows.Scan(&peerID); err != nil {
-			log.Error().Err(err).Msg("Failed to scan peer_id")
-			continue
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, fmt.Errorf("scan node list url: %w", err)
 		}
-		nodelist = append(nodelist, peerID)
+		nodelist = append(nodelist, url)
 	}
 	if err := rows.Err(); err != nil {
-		return nodelist, fmt.Errorf("iterate node list: %w", err)
+		return nil, fmt.Errorf("iterate node list: %w", err)
 	}
 	return nodelist, nil
 }
