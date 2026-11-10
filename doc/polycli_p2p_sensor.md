@@ -23,8 +23,7 @@ Running the sensor will do peer discovery and continue to watch for blocks and
 transactions from those peers. This is useful for observing the network for
 forks and reorgs without the need to run the entire full node infrastructure.
 
-The sensor can persist data to various backends including ClickHouse, Google Cloud
-Datastore, or JSON output. If no nodes.json file exists at the specified path, it
+The sensor can persist data to ClickHouse or write it as JSON to stdout. If no nodes.json file exists at the specified path, it
 will be created automatically.
 
 The bootnodes may change, so refer to the [Polygon Knowledge Layer][bootnodes]
@@ -32,14 +31,13 @@ if the sensor is not discovering peers.
 
 ## Data Model
 
-The two persistent backends store different shapes, and are documented separately:
-
 - [ClickHouse data model](/cmd/p2p/sensor/clickhouse.md) — tables and write paths
-- [Datastore data model](/cmd/p2p/sensor/datastore.md) — kinds and write paths
 
-The ClickHouse backend is append-only and batched; the Datastore backend does a
-read-modify-write per entity. Select one with `--database`, and for ClickHouse pass
-`--clickhouse-dsn`. The ClickHouse DDL lives in `clickhouse/schema.sql` in the
+The ClickHouse backend is append-only and batched. Select it with
+`--database=clickhouse` and pass `--clickhouse-dsn`. The Google Cloud Datastore
+backend has been removed: `--database=datastore` now fails, so switch to
+`--database=clickhouse`. `--project-id`, `--database-id` and `--ttl` only applied
+to Datastore; they are deprecated and ignored. The ClickHouse DDL lives in `clickhouse/schema.sql` in the
 sensor-network-tools repo, not here.
 
 ## JSON-RPC Server
@@ -246,11 +244,9 @@ polycli p2p sensor amoy-nodes.json \
       --clickhouse-flush-interval duration   how often to flush partially filled ClickHouse batches; lower values make rows
                                              visible sooner but create more parts for ClickHouse to merge (default 5s)
       --database string                      which database to persist data to, options are:
-                                               - datastore (GCP Datastore)
                                                - clickhouse (ClickHouse, see --clickhouse-dsn)
                                                - json (output to stdout)
                                                - none (no persistence) (default "none")
-  -d, --database-id string                   datastore database ID
       --dial-ratio int                       ratio of inbound to dialed connections (dial ratio of 2 allows 1/2 of connections to be dialed, setting to 0 defaults to 3)
       --discovery-dns string                 DNS discovery ENR tree URL
       --discovery-port int                   UDP P2P discovery port (default 30303)
@@ -282,7 +278,6 @@ polycli p2p sensor amoy-nodes.json \
       --port int                             TCP network listening port (default 30303)
       --pprof                                run pprof server
       --pprof-port uint                      port pprof runs on (default 6060)
-  -p, --project-id string                    GCP project ID
       --prom                                 run Prometheus server (default true)
       --prom-port uint                       port Prometheus runs on (default 2112)
       --proxy-rpc                            proxy unsupported RPC methods to the --rpc endpoint
@@ -293,7 +288,6 @@ polycli p2p sensor amoy-nodes.json \
   -s, --sensor-id string                     sensor ID when writing block/tx events
       --static-nodes string                  static nodes file
       --trusted-nodes string                 trusted nodes file
-      --ttl duration                         time to live (default 336h0m0s)
       --tx-batch-timeout duration            timeout for batching transactions before broadcast (default 500ms)
       --tx-broadcast-queue-size int          capacity of transaction broadcast queue (default 100000)
       --txs-cache-ttl duration               time to live for transaction cache entries (0 for no expiration) (default 10m0s)

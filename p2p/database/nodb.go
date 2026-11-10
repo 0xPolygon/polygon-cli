@@ -39,6 +39,10 @@ func (n *nodb) WriteBlockEvents(ctx context.Context, peer *enode.Node, anns []Bl
 func (n *nodb) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, hash common.Hash, tfsh time.Time) {
 }
 
+// WriteBlockBodyArrival does nothing.
+func (n *nodb) WriteBlockBodyArrival(ctx context.Context, ann BlockAnnouncement, tfs time.Time) {
+}
+
 // WriteBlockBody does nothing.
 func (n *nodb) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 }

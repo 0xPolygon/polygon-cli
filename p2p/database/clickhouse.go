@@ -152,7 +152,7 @@ type ClickHouseOptions struct {
 // NewClickHouse connects to ClickHouse, verifies connectivity, and starts the
 // background batch flushers. Callers should defer Close to drain buffered rows
 // on shutdown. If the connection cannot be established the returned Database
-// no-ops all writes (mirroring the Datastore backend) so the sensor keeps running.
+// no-ops all writes so the sensor keeps running.
 func NewClickHouse(ctx context.Context, opts ClickHouseOptions) Database {
 	c := &ClickHouse{
 		sensorID:                         opts.SensorID,
@@ -228,14 +228,35 @@ func (c *ClickHouse) Close() error {
 // surface an unreachable backend in the logs; the ping result does not gate the
 // returned connection, so a nil error does not mean ClickHouse is reachable.
 func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
+	conn, err := openClickHouse(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Diagnostic, not fatal. Open does no I/O -- the pool dials lazily and replaces
+	// broken connections, and every flush already retries (newInsertBatcher) -- so a
+	// backend that is not up *yet* recovers once it is. Failing here instead returns
+	// a no-op instance that nothing reconnects, which discarded every row when the
+	// sensors started before ClickHouse finished binding.
+	if err := conn.Ping(ctx); err != nil {
+		log.Warn().Err(err).
+			Msg("Could not ping ClickHouse at startup; continuing, the connection pool will retry on first write")
+	}
+	return conn, nil
+}
+
+// openClickHouse parses dsn, applies the writer defaults it omits, and opens a
+// connection pool. Open does no I/O, so the pool is not known to be reachable.
+func openClickHouse(dsn string) (driver.Conn, error) {
 	chOpts, err := clickhouse.ParseDSN(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse ClickHouse DSN: %w", err)
 	}
 
-	// Writer-friendly defaults when the DSN omits them: LZ4 compression is a
-	// network win on the wide blocks table, and the pool is sized for the
-	// concurrent per-table flushers plus the occasional query.
+	// Defaults for the sensor's writer when the DSN omits them: LZ4 compression
+	// is a network win on the wide blocks table, and the pool is sized for the
+	// concurrent per-table flushers plus the occasional query. ClickHouseNodeList
+	// uses them too; one query needs no more.
 	if chOpts.Compression == nil {
 		chOpts.Compression = &clickhouse.Compression{Method: clickhouse.CompressionLZ4}
 	}
@@ -247,8 +268,9 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 	}
 	// The driver's 30s default would consume a whole chFlushTimeout window on a
 	// single dial against a down backend, and it is the ceiling on how long any
-	// operation waits for a fresh pool connection. Both callers here would rather
-	// fail fast: flushes retry on the next tick, and HasBlock degrades to true.
+	// operation waits for a fresh pool connection. Every caller would rather fail
+	// fast: flushes retry on the next tick, HasBlock degrades to true, and
+	// ClickHouseNodeList reports the error.
 	if chOpts.DialTimeout == 0 {
 		chOpts.DialTimeout = 5 * time.Second
 	}
@@ -256,16 +278,6 @@ func connectClickHouse(ctx context.Context, dsn string) (driver.Conn, error) {
 	conn, err := clickhouse.Open(chOpts)
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to ClickHouse: %w", err)
-	}
-
-	// Diagnostic, not fatal. Open does no I/O -- the pool dials lazily and replaces
-	// broken connections, and every flush already retries (newInsertBatcher) -- so a
-	// backend that is not up *yet* recovers once it is. Failing here instead returns
-	// a no-op instance that nothing reconnects, which discarded every row on a whole
-	// sensor fleet that started 12s before ClickHouse finished binding.
-	if err := conn.Ping(ctx); err != nil {
-		log.Warn().Err(err).
-			Msg("Could not ping ClickHouse at startup; continuing, the connection pool will retry on first write")
 	}
 	return conn, nil
 }
@@ -478,10 +490,24 @@ func (c *ClickHouse) recordsTxEvents() bool {
 
 func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, txs *bortx.Body, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
-		// blocks + block_bodies + block_total_difficulty + the event, then one
-		// block_txs row per transaction and one transactions row per transaction
-		// that is not a Bor state-sync transaction.
-		c.discarded.Add(4 + uint64(len(txs.Hashes)) + uint64(len(txs.Txs)))
+		// The same rows the writes below would produce: the event; blocks,
+		// block_bodies, block_total_difficulty and one block_txs row per
+		// transaction; and one transactions row per transaction that is not a Bor
+		// state-sync one.
+		var n uint64
+		if c.recordsBlockEvents() && peer != nil {
+			n++
+		}
+		if c.shouldWriteBlocks {
+			n += 2 + uint64(len(txs.Hashes))
+			if td != nil && td.Sign() > 0 {
+				n++
+			}
+		}
+		if c.shouldWriteTransactions {
+			n += uint64(len(txs.Txs))
+		}
+		c.discarded.Add(n)
 		return
 	}
 	// Which peer announced which total difficulty is an observation, so it rides on
@@ -534,11 +560,19 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	// off recorded new_block, body, hash_announce and full_tx but silently dropped
 	// header timing and the backfill marker -- and headers are still requested in
 	// that configuration, so the events were produced and thrown away.
-	if c.conn == nil {
-		c.discarded.Add(uint64(len(headers)))
+	if !c.shouldWriteBlocks && !c.recordsBlockEvents() {
 		return
 	}
-	if !c.shouldWriteBlocks && !c.recordsBlockEvents() {
+	if c.conn == nil {
+		// A blocks row and an event per header, as enabled.
+		var perHeader uint64
+		if c.shouldWriteBlocks {
+			perHeader++
+		}
+		if c.recordsBlockEvents() {
+			perHeader++
+		}
+		c.discarded.Add(perHeader * uint64(len(headers)))
 		return
 	}
 	source := srcHeader
@@ -563,28 +597,48 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	}
 }
 
-func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
+// WriteBlockBodyArrival records the body event. Like the header sources it
+// carries no peer -- the sensor requested the body -- so it is excluded from the
+// propagation rollup, but it makes "which sensor got the body, and when"
+// answerable. It is written on arrival, whether or not the body later checks
+// out against its header, because the arrival is an observation either way.
+func (c *ClickHouse) WriteBlockBodyArrival(ctx context.Context, ann BlockAnnouncement, tfs time.Time) {
+	if !c.recordsBlockEvents() {
+		return
+	}
 	if c.conn == nil {
 		c.discarded.Add(1)
 		return
 	}
-	hash := ann.Hash
+	c.blockEvt.add(chBlockEvent{
+		blockNumber:     ann.Number,
+		blockHash:       ann.Hash.Hex(),
+		source:          srcBody,
+		seenAt:          tfs,
+		totalDifficulty: big.NewInt(0),
+	})
+}
 
-	// The body arrived: that is true whether or not its uncles decode, so the
-	// event is recorded first. Like the header sources it carries no peer -- the
-	// sensor requested it -- so it is excluded from the propagation rollup, but it
-	// makes "which sensor got the body, and when" answerable. The transactions
-	// were decoded before this was called (txs), so the uncle decode below is the
-	// only failure left here.
-	if c.recordsBlockEvents() {
-		c.blockEvt.add(chBlockEvent{
-			blockNumber:     ann.Number,
-			blockHash:       hash.Hex(),
-			source:          srcBody,
-			seenAt:          tfs,
-			totalDifficulty: big.NewInt(0),
-		})
+func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
+	if c.conn == nil {
+		// block_bodies (skipped below when the uncles do not decode) plus one
+		// block_txs row per transaction, and one transactions row per transaction
+		// that is not a Bor state-sync one, counting only the tables this sensor
+		// writes.
+		var n uint64
+		if c.shouldWriteBlocks {
+			n += uint64(len(txs.Hashes))
+			if _, err := body.Uncles.Items(); err == nil {
+				n++
+			}
+		}
+		if c.shouldWriteTransactions {
+			n += uint64(len(txs.Txs))
+		}
+		c.discarded.Add(n)
+		return
 	}
+	hash := ann.Hash
 
 	// Each fact is skipped exactly when ITS inputs are undecodable, no wider.
 	// block_bodies carries uncle facts, so a failed uncle decode skips only that
@@ -610,11 +664,11 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, tx
 }
 
 func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, anns []BlockAnnouncement, tfs time.Time) {
-	if c.conn == nil {
-		c.discarded.Add(uint64(len(anns)))
+	if peer == nil {
 		return
 	}
-	if peer == nil {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(anns)))
 		return
 	}
 	nodeID := peer.ID().String()
@@ -636,11 +690,11 @@ func (c *ClickHouse) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.No
 }
 
 func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if c.conn == nil {
-		c.discarded.Add(uint64(len(hashes)))
+	if peer == nil {
 		return
 	}
-	if peer == nil {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(hashes)))
 		return
 	}
 	nodeID := peer.ID().String()
@@ -656,7 +710,15 @@ func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Nod
 
 func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 	if c.conn == nil {
-		c.discarded.Add(uint64(len(txs)))
+		// A full_tx event and a transactions row per transaction, as enabled.
+		var n uint64
+		if c.recordsTxEvents() && peer != nil {
+			n += uint64(len(txs))
+		}
+		if c.shouldWriteTransactions {
+			n += uint64(len(txs))
+		}
+		c.discarded.Add(n)
 		return
 	}
 	// A delivered body is a distinct event from a hash announcement, and worth
@@ -680,11 +742,11 @@ func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, tx
 }
 
 func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time.Time) {
-	if c.conn == nil {
-		c.discarded.Add(uint64(len(peers)))
+	if !c.shouldWritePeers {
 		return
 	}
-	if !c.shouldWritePeers {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(peers)))
 		return
 	}
 	// node_id matches what the event streams record, so peers and events are
@@ -760,6 +822,26 @@ func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	return exists == 1
 }
 
+// ClickHouseNodeList returns the URLs of the most recently seen peers in the
+// sensor database at dsn. Unlike NewClickHouse, which discards everything when
+// it cannot connect so the sensor keeps running, it fails, so an unreachable
+// database is not mistaken for an empty node list.
+func ClickHouseNodeList(ctx context.Context, dsn string, limit int) ([]string, error) {
+	conn, err := openClickHouse(dsn)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close ClickHouse connection")
+		}
+	}()
+	if err := conn.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("ping ClickHouse: %w", err)
+	}
+	return (&ClickHouse{conn: conn}).NodeList(ctx, limit)
+}
+
 // NodeList returns the most recently seen peers' enode URLs, from the narrow
 // peers_current rollup rather than grouping over the event firehose.
 func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) {
@@ -777,17 +859,18 @@ func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) 
 		}
 	}()
 
+	// A node list is returned whole or not at all, so a row that cannot be read
+	// fails the call rather than silently shortening the list.
 	nodelist := []string{}
 	for rows.Next() {
-		var peerID string
-		if err := rows.Scan(&peerID); err != nil {
-			log.Error().Err(err).Msg("Failed to scan peer_id")
-			continue
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, fmt.Errorf("scan node list url: %w", err)
 		}
-		nodelist = append(nodelist, peerID)
+		nodelist = append(nodelist, url)
 	}
 	if err := rows.Err(); err != nil {
-		return nodelist, fmt.Errorf("iterate node list: %w", err)
+		return nil, fmt.Errorf("iterate node list: %w", err)
 	}
 	return nodelist, nil
 }

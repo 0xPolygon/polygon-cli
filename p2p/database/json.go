@@ -255,6 +255,13 @@ func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.
 	})
 }
 
+// WriteBlockBodyArrival does nothing. The JSON backend records a body only once
+// it has been checked against its header, in WriteBlockBody, which carries the
+// time the body arrived; a body that fails the check or whose header never
+// arrives is not recorded.
+func (j *JSONDatabase) WriteBlockBodyArrival(ctx context.Context, ann BlockAnnouncement, tfs time.Time) {
+}
+
 // WriteBlockBody writes the block body as JSON.
 func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 	hash := ann.Hash

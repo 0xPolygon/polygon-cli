@@ -776,10 +776,11 @@ func TestUnavailableBackendKeepsWarning(t *testing.T) {
 	tx2 := types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()) + 1, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)})
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx1, tx2}})
 	db.WriteBlock(ctx, testPeer(t), block, txsOf(t, block), big.NewInt(1), now)
-	// 4 block-level rows (blocks, block_bodies, block_total_difficulty, the event)
-	// plus block_txs and transactions per transaction.
-	if got := ch.discarded.Load(); got != 8 {
-		t.Fatalf("discarded: want 8 (4 block rows + 2 per tx), got %d", got)
+	// Only block writes are on: blocks, block_bodies, block_total_difficulty and
+	// a block_txs row per transaction. Events and transactions are off, so they
+	// are not counted.
+	if got := ch.discarded.Load(); got != 5 {
+		t.Fatalf("discarded: want 5 (3 block rows + 1 per tx), got %d", got)
 	}
 	// The warner goroutine must be registered with the WaitGroup so Close waits.
 	done := make(chan struct{})

@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"sync"
 	"testing"
@@ -155,5 +156,110 @@ func TestHasBlockSeesPendingBlock(t *testing.T) {
 	c.addBlock(h)
 	if !c.HasBlock(ctx, h.Hash()) {
 		t.Fatal("HasBlock = false for an enqueued block, want true without querying")
+	}
+}
+
+// TestRowBatcherDropsWhenFull checks that add never blocks: a row that does not
+// fit in the buffer is counted as dropped.
+func TestRowBatcherDropsWhenFull(t *testing.T) {
+	b := &rowBatcher[int]{in: make(chan int, 1)}
+	b.add(1)
+	b.add(2)
+	if got := b.dropped.Load(); got != 1 {
+		t.Fatalf("dropped = %d, want 1", got)
+	}
+}
+
+// TestRowBatcherSurvivesFlushErrorsAndReportsDrops checks that a failed flush
+// does not stop the batcher, and that the dropped count is reported and reset
+// on the next tick.
+func TestRowBatcherSurvivesFlushErrorsAndReportsDrops(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	defer func() { cancel(); wg.Wait() }()
+	var mu sync.Mutex
+	flushes := 0
+	b := newRowBatcher(ctx, &wg, "test", 100, 10*time.Millisecond, func([]int) error {
+		mu.Lock()
+		defer mu.Unlock()
+		flushes++
+		return errors.New("insert failed")
+	})
+	b.dropped.Store(3)
+	b.add(1)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		n := flushes
+		mu.Unlock()
+		if n > 0 && b.dropped.Load() == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after 5s: %d flushes, dropped = %d; want a flush and the count reset", n, b.dropped.Load())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	b.add(2)
+	deadline = time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		n := flushes
+		mu.Unlock()
+		if n > 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("batcher stopped flushing after a failed flush")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// TestRowBatcherDrainFlushesInFullBatches checks the shutdown drain: rows
+// already queued when the context is cancelled are all flushed, in batches of
+// at most maxRows.
+func TestRowBatcherDrainFlushesInFullBatches(t *testing.T) {
+	const maxRows = 2
+	var batches [][]int
+	b := &rowBatcher[int]{
+		name:     "test",
+		in:       make(chan int, 10),
+		maxRows:  maxRows,
+		interval: time.Hour,
+		flush: func(rows []int) error {
+			batches = append(batches, append([]int(nil), rows...))
+			return nil
+		},
+	}
+	for i := range 5 {
+		b.in <- i
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	b.loop(ctx)
+
+	total := 0
+	for _, batch := range batches {
+		if len(batch) > maxRows {
+			t.Fatalf("flushed a batch of %d rows, more than maxRows %d", len(batch), maxRows)
+		}
+		total += len(batch)
+	}
+	if total != 5 {
+		t.Fatalf("flushed %d rows, want all 5", total)
+	}
+}
+
+func TestCopyBig(t *testing.T) {
+	if copyBig(nil) != nil {
+		t.Fatal("copyBig(nil) != nil")
+	}
+	v := big.NewInt(5)
+	c := copyBig(v)
+	v.SetInt64(6)
+	if c.Int64() != 5 {
+		t.Fatal("copyBig returned an alias, not a copy")
 	}
 }

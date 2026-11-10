@@ -24,10 +24,10 @@ type BlockCache struct {
 	Header *types.Header
 	Body   *eth.BlockBody
 	TD     *big.Int
-	// TxRoot is the transaction root of Body, set with it, so a body cached
-	// before its header can be checked against the header when it arrives
-	// without decoding the body again.
-	TxRoot common.Hash
+	// BodyRoot is the bodyRoot of Body, set with it, so a body cached before
+	// its header can be checked against the header when it arrives without
+	// decoding the body again.
+	BodyRoot common.Hash
 }
 
 // ConnsOptions contains configuration options for creating a new Conns manager.
@@ -70,6 +70,10 @@ type Conns struct {
 	// blocks tracks blocks written to the database across all peers
 	// to avoid duplicate writes and requests.
 	blocks *ds.LRU[common.Hash, BlockCache]
+
+	// bodies keeps block bodies out of the database until they have been
+	// checked against their header.
+	bodies *bodyGate
 
 	// txs caches transactions for serving to peers and duplicate detection
 	txs *ds.LRU[common.Hash, *types.Transaction]
@@ -160,6 +164,7 @@ func NewConns(opts ConnsOptions) *Conns {
 	c := &Conns{
 		conns:                      make(map[string]*conn),
 		blocks:                     ds.NewLRU[common.Hash, BlockCache](opts.BlocksCache),
+		bodies:                     newBodyGate(bodyGateOptions(opts.BlocksCache)),
 		txs:                        ds.NewLRU[common.Hash, *types.Transaction](opts.TxsCache),
 		announcedTxs:               ds.NewLRU[common.Hash, struct{}](opts.TxsCache),
 		knownTxsBloom:              opts.KnownTxsBloom,

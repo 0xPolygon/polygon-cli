@@ -7,8 +7,6 @@ cloud.google.com/go/auth/oauth2adapt v0.3.0 h1:FY8oSZpCYoUNv6QxVODuMjQz4IlSOVeiQ
 cloud.google.com/go/auth/oauth2adapt v0.3.0/go.mod h1:7+2uCm7++XFO+/lN06c2HXpDXb/NMNn2/UwyBPbTnkk=
 cloud.google.com/go/compute/metadata v0.10.0 h1:pyKMUQSwchgkIBBJGdILqQbs/BNJXqwSA7Ej6LAvvtY=
 cloud.google.com/go/compute/metadata v0.10.0/go.mod h1:rGFHRrIif570kSibjFTMbt6/4/tzgJWFGI/HVol4GIk=
-cloud.google.com/go/datastore v1.27.0 h1:JcnNVNNpEkZAkPd6x+GK8XyHoGIwq40Fl3+s+174quo=
-cloud.google.com/go/datastore v1.27.0/go.mod h1:nWk/77Jm6IFzMBpaVtThPKHp5SmBRLThUQLDOQdS8sk=
 cloud.google.com/go/iam v1.12.0 h1:Aki3bX9aHUDKPHfnRJfDcTdVedvy6quGBQcTqx3DRXk=
 cloud.google.com/go/iam v1.12.0/go.mod h1:FEZ4lXpADAC2AIpQY7LANNjjwyQ2jK439CI2VaD+sLY=
 cloud.google.com/go/kms v1.35.0 h1:nJ/ktaqspx1nPM9vIcO0SHbhqCAm8nvAxL1siuVgKm0=
