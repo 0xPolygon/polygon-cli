@@ -239,7 +239,7 @@ var SensorCmd = &cobra.Command{
 			TD:    rpcBlock.TotalDifficulty.ToBigInt(),
 		}
 
-		peersGauge := p2p.NewPeersGauge()
+		peerMetrics := p2p.NewPeerMetrics()
 		metrics := p2p.NewBlockMetrics(head.Block)
 
 		// When block rebroadcasting is enabled and signer validation is on, load
@@ -386,9 +386,10 @@ var SensorCmd = &cobra.Command{
 		for {
 			select {
 			case <-ticker.C:
-				peersGauge.Set(float64(server.PeerCount()))
+				peers := server.Peers()
+				peerMetrics.Update(peers)
 				metrics.Update(conns.HeadBlock().Block, conns.OldestBlock())
-				writePeers(server.Peers())
+				writePeers(peers)
 			case <-peerSnapshotTicker.C:
 				db.WritePeers(ctx, server.Peers(), time.Now())
 			case <-ctx.Done():
