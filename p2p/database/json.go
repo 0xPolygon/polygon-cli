@@ -255,8 +255,10 @@ func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.
 	})
 }
 
-// WriteBlockBodyArrival does nothing; the JSON backend records the body with its
-// arrival time in WriteBlockBody.
+// WriteBlockBodyArrival does nothing. The JSON backend records a body only once
+// it has been checked against its header, in WriteBlockBody, which carries the
+// time the body arrived; a body that fails the check or whose header never
+// arrives is not recorded.
 func (j *JSONDatabase) WriteBlockBodyArrival(ctx context.Context, ann BlockAnnouncement, tfs time.Time) {
 }
 

@@ -12,8 +12,6 @@ import (
 
 type (
 	nodeListParams struct {
-		ProjectID     string
-		DatabaseID    string
 		ClickHouseDSN string
 		OutputFile    string
 		Limit         int
@@ -64,8 +62,10 @@ func init() {
 	flag.MarkFlagsRequired(NodeListCmd, "clickhouse-dsn")
 	// The Datastore backend is retired. Its flags are still accepted so existing
 	// invocations keep parsing, but they do nothing.
-	f.StringVarP(&inputNodeListParams.ProjectID, "project-id", "p", "", "GCP project ID")
-	f.StringVarP(&inputNodeListParams.DatabaseID, "database-id", "d", "", "datastore database ID")
+	// Deprecated and ignored; registered only so existing invocations get a
+	// deprecation warning rather than an unknown-flag error.
+	f.StringP("project-id", "p", "", "GCP project ID")
+	f.StringP("database-id", "d", "", "datastore database ID")
 	flag.MarkDeprecated(NodeListCmd, "project-id", "the Datastore backend is retired; use --clickhouse-dsn")
 	flag.MarkDeprecated(NodeListCmd, "database-id", "the Datastore backend is retired; use --clickhouse-dsn")
 }

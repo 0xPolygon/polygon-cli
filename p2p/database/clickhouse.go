@@ -253,9 +253,10 @@ func openClickHouse(dsn string) (driver.Conn, error) {
 		return nil, fmt.Errorf("could not parse ClickHouse DSN: %w", err)
 	}
 
-	// Writer-friendly defaults when the DSN omits them: LZ4 compression is a
-	// network win on the wide blocks table, and the pool is sized for the
-	// concurrent per-table flushers plus the occasional query.
+	// Defaults for the sensor's writer when the DSN omits them: LZ4 compression
+	// is a network win on the wide blocks table, and the pool is sized for the
+	// concurrent per-table flushers plus the occasional query. ClickHouseNodeList
+	// uses them too; one query needs no more.
 	if chOpts.Compression == nil {
 		chOpts.Compression = &clickhouse.Compression{Method: clickhouse.CompressionLZ4}
 	}
@@ -267,8 +268,9 @@ func openClickHouse(dsn string) (driver.Conn, error) {
 	}
 	// The driver's 30s default would consume a whole chFlushTimeout window on a
 	// single dial against a down backend, and it is the ceiling on how long any
-	// operation waits for a fresh pool connection. Both callers here would rather
-	// fail fast: flushes retry on the next tick, and HasBlock degrades to true.
+	// operation waits for a fresh pool connection. Every caller would rather fail
+	// fast: flushes retry on the next tick, HasBlock degrades to true, and
+	// ClickHouseNodeList reports the error.
 	if chOpts.DialTimeout == 0 {
 		chOpts.DialTimeout = 5 * time.Second
 	}

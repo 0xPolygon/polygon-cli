@@ -12,7 +12,7 @@ import (
 	ds "github.com/0xPolygon/polygon-cli/p2p/datastructures"
 )
 
-// maxPendingBodiesPerBlock bounds how many distinct bodies (by txRoot) are held
+// maxPendingBodiesPerBlock bounds how many distinct bodies (by bodyRoot) are held
 // for one block while its header is outstanding. Honest peers all send the same
 // body, so it takes one slot; the rest only absorb bodies that will fail the
 // check.
@@ -29,13 +29,13 @@ type pendingBody struct {
 }
 
 // bodyGate keeps a block body out of the database until it has been checked
-// against its header's txRoot. Headers and bodies arrive in either order and on
+// against its header. Headers and bodies arrive in either order and on
 // different peers' goroutines, so the two lookups -- is the header known, else
 // hold the body; record the header, release any held body -- happen under one
 // lock. Otherwise a body held just after its header went by would never be
 // written.
 //
-// Bodies are held per block by txRoot, first arrival kept, so a later body with
+// Bodies are held per block by bodyRoot, first arrival kept, so a later body with
 // different contents cannot displace one that will match the header.
 type bodyGate struct {
 	mu      sync.Mutex
@@ -50,9 +50,9 @@ func newBodyGate(opts ds.LRUOptions) *bodyGate {
 	}
 }
 
-// bodyArrived returns the txRoot of the block's header if it has been seen.
+// bodyArrived returns the bodyRoot of the block's header if it has been seen.
 // Otherwise it holds the body until headerSeen is called for the block. A body
-// whose txRoot is already held, or that would exceed maxPendingBodiesPerBlock,
+// whose bodyRoot is already held, or that would exceed maxPendingBodiesPerBlock,
 // is not held again.
 func (g *bodyGate) bodyArrived(hash common.Hash, body pendingBody) (common.Hash, bool) {
 	g.mu.Lock()
@@ -73,7 +73,7 @@ func (g *bodyGate) bodyArrived(hash common.Hash, body pendingBody) (common.Hash,
 	return common.Hash{}, false
 }
 
-// headerSeen records a header's txRoot and removes every body held for the
+// headerSeen records a header's bodyRoot and removes every body held for the
 // block. It returns the one matching root, if any, for the caller to write, and
 // the roots of the others, which are dropped.
 func (g *bodyGate) headerSeen(hash, root common.Hash) (match pendingBody, ok bool, dropped []common.Hash) {

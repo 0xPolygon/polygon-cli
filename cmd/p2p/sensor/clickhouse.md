@@ -445,7 +445,8 @@ flowchart LR
 | `HasBlock`                | —                                                                                               | Reads `blocks` by hash, once per new header           |
 
 **A body is written only once it has been checked against its header.** The
-header commits to the body's transactions through `txRoot`. If the header is
+header commits to the body's transactions, uncles and withdrawals through
+`txRoot`, `uncleHash` and `withdrawalsRoot`. If the header is
 already known when a `BlockBodies` response arrives, the body is checked and
 written straight away. If not, it is held (`p2p/bodygate.go`) and written when
 the header arrives, with the time the body arrived, or dropped if it does not

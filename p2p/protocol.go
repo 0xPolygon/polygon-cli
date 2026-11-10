@@ -1134,10 +1134,10 @@ func (c *conn) cacheAndAnnounceHeader(header *types.Header, isParent, announce b
 		c.conns.Blocks().Update(header.Hash(), func(cache BlockCache) BlockCache {
 			// A body cached before this header was not checked against it; drop it
 			// if it does not match, so it is never served or completed as the head.
-			if cache.Body != nil && cache.TxRoot != header.TxHash {
-				c.logBodyRootMismatch(header.Hash(), header.TxHash, cache.TxRoot)
+			if want := headerBodyRoot(header); cache.Body != nil && cache.BodyRoot != want {
+				c.logBodyRootMismatch(header.Hash(), want, cache.BodyRoot)
 				cache.Body = nil
-				cache.TxRoot = common.Hash{}
+				cache.BodyRoot = common.Hash{}
 			}
 			cache.Header = header
 			return cache
@@ -1246,16 +1246,26 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	c.db.WriteBlockBodyArrival(ctx, ann, tfs)
 
 	// The body is written to the database only once it has been checked against
-	// its header's txRoot, as a NewBlock is. If the header has not arrived yet the
+	// its header, as a NewBlock is. If the header has not arrived yet the
 	// body is held, and written (or dropped) when it does: written unchecked, a
 	// body for the right hash with a transaction added or removed would land in
 	// block_bodies and block_txs under the real block hash, where it can win the
 	// merge against honest sensors' rows. The serving cache is checked again
 	// below, in the same update that attaches the body, and when the header is
 	// cached (cacheAndAnnounceHeader).
-	root := txs.Root()
+	root, err := rawBodyRoot(body, txs)
+	if err != nil {
+		c.logger.Warn().Err(err).Str("hash", hash.Hex()).Msg("Dropping block body that cannot be checked against its header")
+		return nil
+	}
+	// A matching body held from another peer is written here; this one is then
+	// the same body, so it is not written again below.
+	released := false
 	if inCache && cached.Header != nil {
-		c.releasePendingBody(ctx, cached.Header)
+		if pending, ok := c.takePendingBody(cached.Header); ok {
+			c.db.WriteBlockBody(ctx, pending.body, pending.txs, pending.ann, pending.tfs)
+			released = true
+		}
 	}
 	// A body is only held for the database, so there is nothing to hold when
 	// neither its facts nor its transactions are written.
@@ -1269,7 +1279,9 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 			c.logBodyRootMismatch(hash, want, root)
 			return nil
 		}
-		c.db.WriteBlockBody(ctx, body, txs, ann, tfs)
+		if !released {
+			c.db.WriteBlockBody(ctx, body, txs, ann, tfs)
+		}
 	}
 
 	// When cache-only-validated is enabled, only retain the body if the block
@@ -1289,12 +1301,12 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	var header *types.Header
 	if retainBody {
 		c.conns.Blocks().Update(hash, func(cache BlockCache) BlockCache {
-			if cache.Header != nil && cache.Header.TxHash != root {
-				c.logBodyRootMismatch(hash, cache.Header.TxHash, root)
+			if cache.Header != nil && headerBodyRoot(cache.Header) != root {
+				c.logBodyRootMismatch(hash, headerBodyRoot(cache.Header), root)
 				return cache
 			}
 			cache.Body = body
-			cache.TxRoot = root
+			cache.BodyRoot = root
 			header = cache.Header
 			return cache
 		})
@@ -1328,15 +1340,19 @@ func assembleBlock(header *types.Header, txs *bortx.Body, uncles []*types.Header
 }
 
 // blockFromRaw builds the types.Block for a decoded NewBlock, after checking its
-// transactions against the header's txRoot, which the block hash commits to.
+// transactions, uncles and withdrawals against the header, which the block hash
+// commits to.
 func blockFromRaw(raw rawBlock, txs *bortx.Body) (*types.Block, error) {
 	if root := txs.Root(); root != raw.Header.TxHash {
 		return nil, fmt.Errorf("transaction root %s does not match header %s", root.Hex(), raw.Header.TxHash.Hex())
 	}
+	if decodedBodyRoot(txs, raw.Uncles, raw.Withdrawals) != headerBodyRoot(raw.Header) {
+		return nil, errors.New("uncles or withdrawals do not match header")
+	}
 	return assembleBlock(raw.Header, txs, raw.Uncles, raw.Withdrawals), nil
 }
 
-// releasePendingBody records a header's txRoot and writes the body that arrived
+// releasePendingBody records a header's bodyRoot and writes the body that arrived
 // before it, if there is one and it matches. A body that does not match is
 // dropped unwritten.
 func (c *conn) releasePendingBody(ctx context.Context, header *types.Header) {
@@ -1345,14 +1361,15 @@ func (c *conn) releasePendingBody(ctx context.Context, header *types.Header) {
 	}
 }
 
-// takePendingBody records a header's txRoot and returns the held body that
+// takePendingBody records a header's bodyRoot and returns the held body that
 // matches it, if any, leaving the write to the caller. Held bodies that do not
 // match are dropped.
 func (c *conn) takePendingBody(header *types.Header) (pendingBody, bool) {
 	hash := header.Hash()
-	pending, ok, dropped := c.conns.bodies.headerSeen(hash, header.TxHash)
+	want := headerBodyRoot(header)
+	pending, ok, dropped := c.conns.bodies.headerSeen(hash, want)
 	for _, root := range dropped {
-		c.logBodyRootMismatch(hash, header.TxHash, root)
+		c.logBodyRootMismatch(hash, want, root)
 	}
 	return pending, ok
 }
@@ -1361,8 +1378,8 @@ func (c *conn) takePendingBody(header *types.Header) (pendingBody, bool) {
 func (c *conn) logBodyRootMismatch(hash, want, got common.Hash) {
 	c.logger.Warn().
 		Str("hash", hash.Hex()).
-		Str("want_tx_root", want.Hex()).
-		Str("got_tx_root", got.Hex()).
+		Str("want_body_root", want.Hex()).
+		Str("got_body_root", got.Hex()).
 		Msg("Dropping block body that does not match its header")
 }
 
@@ -1558,10 +1575,10 @@ func (c *conn) cacheFullBlock(ctx context.Context, packet *NewBlockPacket, body 
 			return cache
 		}
 		return BlockCache{
-			Header: packet.Block.Header(),
-			Body:   blockBody,
-			TD:     packet.TD,
-			TxRoot: packet.Block.TxHash(),
+			Header:   packet.Block.Header(),
+			Body:     blockBody,
+			TD:       packet.TD,
+			BodyRoot: headerBodyRoot(packet.Block.Header()),
 		}
 	})
 	if cached {
