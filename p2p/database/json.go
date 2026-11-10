@@ -255,6 +255,11 @@ func (j *JSONDatabase) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.
 	})
 }
 
+// WriteBlockBodyArrival does nothing; the JSON backend records the body with its
+// arrival time in WriteBlockBody.
+func (j *JSONDatabase) WriteBlockBodyArrival(ctx context.Context, ann BlockAnnouncement, tfs time.Time) {
+}
+
 // WriteBlockBody writes the block body as JSON.
 func (j *JSONDatabase) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 	hash := ann.Hash

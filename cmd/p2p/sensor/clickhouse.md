@@ -366,7 +366,10 @@ flowchart LR
         NO-OP"]
         A2[WriteBlock]
         A3[WriteBlockHeaders]
-        A4[WriteBlockBody]
+        A4a["WriteBlockBodyArrival
+        on arrival"]
+        A4["WriteBlockBody
+        once checked against the header"]
         A5[WriteTransactions]
         A6[WriteTransactionEvents]
         A7[WritePeers]
@@ -396,6 +399,8 @@ flowchart LR
     H2 --> A2
     H3 --> A3
     H3 --> H7
+    H3 -. "body that arrived first" .-> A4
+    H4 --> A4a
     H4 --> A4
     H5 --> A5
     H6 --> A6
@@ -430,13 +435,25 @@ flowchart LR
 | ------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | `WriteBlock`              | `blocks`, `block_bodies`, `block_total_difficulty`, `block_txs`, `block_events`, `transactions` | The only path with the whole block                    |
 | `WriteBlockHeaders`       | `blocks`, `block_events`                                                                        | `isParent` picks `header_backfill`; gated separately  |
-| `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`, `block_events`                                     | Event `source = 'body'`                               |
+| `WriteBlockBodyArrival`   | `block_events`                                                                                  | Event `source = 'body'`, written on arrival           |
+| `WriteBlockBody`          | `block_bodies`, `block_txs`, `transactions`                                                     | Only once checked against the header, see below       |
 | `WriteBlockEvents`        | `block_events`                                                                                  | Takes `[]BlockAnnouncement`, so heights reach the row |
 | `WriteBlockHashFirstSeen` | nothing                                                                                         | Derived instead, see below                            |
 | `WriteTransactions`       | `transactions`, `tx_events`                                                                     | Event under either tx-event flag                      |
 | `WriteTransactionEvents`  | `tx_events`                                                                                     |                                                       |
 | `WritePeers`              | `peers`                                                                                         | Own ticker, not the 2s metrics tick                   |
 | `HasBlock`                | —                                                                                               | Reads `blocks` by hash, once per new header           |
+
+**A body is written only once it has been checked against its header.** The
+header commits to the body's transactions through `txRoot`. If the header is
+already known when a `BlockBodies` response arrives, the body is checked and
+written straight away. If not, it is held (`p2p/bodygate.go`) and written when
+the header arrives, with the time the body arrived, or dropped if it does not
+match. Written unchecked, a body for the right hash with a transaction added or
+removed would put a wrong `tx_count` and shifted `block_txs` indexes under the
+real block hash, and `block_bodies` and `block_txs` keep whichever duplicate the
+merge picks. The arrival event is written straight away either way, since it is
+an observation of the sensor, not a fact about the block.
 
 ### Five things worth reading off this
 
