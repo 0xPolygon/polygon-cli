@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 polygon-cli is a Swiss Army knife of blockchain tools for building, testing, and running blockchain applications. It's a collection of utilities primarily focused on Polygon/Ethereum ecosystems.
 
+This is a public GitHub repository ([0xPolygon/polygon-cli](https://github.com/0xPolygon/polygon-cli)). Anything committed or posted to it, including code, comments, docs, commit messages, PRs and issues, is visible to everyone. See [Public Writing](#public-writing-prs-commits-comments-docs).
+
 ## Architecture Overview
 
 The project follows a command-based architecture using Cobra framework:
