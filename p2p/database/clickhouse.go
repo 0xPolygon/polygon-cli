@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"github.com/0xPolygon/polygon-cli/util"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -475,11 +476,12 @@ func (c *ClickHouse) recordsTxEvents() bool {
 	return c.shouldWriteTransactionEvents || c.shouldWriteFirstTransactionEvent
 }
 
-func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, txs *bortx.Body, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
 		// blocks + block_bodies + block_total_difficulty + the event, then one
-		// block_txs and one transactions row per transaction.
-		c.discarded.Add(4 + 2*uint64(len(block.Transactions())))
+		// block_txs row per transaction and one transactions row per transaction
+		// that is not a Bor state-sync transaction.
+		c.discarded.Add(4 + uint64(len(txs.Hashes)) + uint64(len(txs.Txs)))
 		return
 	}
 	// Which peer announced which total difficulty is an observation, so it rides on
@@ -518,10 +520,10 @@ func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *ty
 	}
 	if c.shouldWriteBlocks {
 		c.addBlock(block.Header())
-		c.writeBlockBody(block.Hash(), block.Transactions(), block.Uncles(), tfs)
+		c.writeBlockBody(block.Hash(), txs.Hashes, block.Uncles(), tfs)
 	}
 	if c.shouldWriteTransactions {
-		c.writeTxs(block.Transactions(), tfs)
+		c.writeTxs(txs.Txs, tfs)
 	}
 }
 
@@ -561,19 +563,19 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	}
 }
 
-func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 	if c.conn == nil {
 		c.discarded.Add(1)
 		return
 	}
 	hash := ann.Hash
 
-	// The body arrived: that is true whether or not it decodes, so the event is
-	// recorded first. Like the header sources it carries no peer -- the sensor
-	// requested it -- so it is excluded from the propagation rollup, but it makes
-	// "which sensor got the body, and when" answerable. Recording it first also
-	// keeps the two decode-failure paths below consistent: previously a failed
-	// transaction decode skipped the event while a failed uncle decode kept it.
+	// The body arrived: that is true whether or not its uncles decode, so the
+	// event is recorded first. Like the header sources it carries no peer -- the
+	// sensor requested it -- so it is excluded from the propagation rollup, but it
+	// makes "which sensor got the body, and when" answerable. The transactions
+	// were decoded before this was called (txs), so the uncle decode below is the
+	// only failure left here.
 	if c.recordsBlockEvents() {
 		c.blockEvt.add(chBlockEvent{
 			blockNumber:     ann.Number,
@@ -582,14 +584,6 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, an
 			seenAt:          tfs,
 			totalDifficulty: big.NewInt(0),
 		})
-	}
-
-	txs, err := body.Transactions.Items()
-	if err != nil {
-		// Nothing downstream is derivable: block_bodies needs the count, block_txs
-		// and transactions need the transactions themselves.
-		log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
-		return
 	}
 
 	// Each fact is skipped exactly when ITS inputs are undecodable, no wider.
@@ -605,13 +599,13 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, an
 	}
 	if c.shouldWriteBlocks {
 		if uncleErr == nil {
-			c.writeBlockBody(hash, txs, uncles, tfs)
+			c.writeBlockBody(hash, txs.Hashes, uncles, tfs)
 		} else {
-			c.writeBlockTxs(hash, txs, tfs)
+			c.writeBlockTxs(hash, txs.Hashes, tfs)
 		}
 	}
 	if c.shouldWriteTransactions {
-		c.writeTxs(txs, tfs)
+		c.writeTxs(txs.Txs, tfs)
 	}
 }
 
@@ -885,31 +879,34 @@ func newChBlock(h *types.Header) chBlock {
 // Deliberately stores no encoded block size: it is only knowable from a full
 // NewBlock, not from a body delivered on its own, so it is not a function of the
 // hash and two sensors could write differing rows for one block.
-func (c *ClickHouse) writeBlockBody(hash common.Hash, txs []*types.Transaction, uncles []*types.Header, tfs time.Time) {
+// writeBlockBody records the body facts. txHashes holds every transaction in body
+// order, Bor state-sync transactions included, so tx_count and every block_txs
+// tx_index match the chain.
+func (c *ClickHouse) writeBlockBody(hash common.Hash, txHashes []common.Hash, uncles []*types.Header, tfs time.Time) {
 	uncleHashes := make([]string, 0, len(uncles))
 	for _, u := range uncles {
 		uncleHashes = append(uncleHashes, u.Hash().Hex())
 	}
 	c.blockBodies.add(chBlockBody{
 		hash:       hash.Hex(),
-		txCount:    uint32(len(txs)),
+		txCount:    uint32(len(txHashes)),
 		uncleCount: uint16(len(uncles)),
 		uncles:     uncleHashes,
 	})
-	c.writeBlockTxs(hash, txs, tfs)
+	c.writeBlockTxs(hash, txHashes, tfs)
 }
 
 // writeBlockTxs records the ordered block -> transaction mapping alone, for the
 // case where the body facts row cannot be written (undecodable uncles) but the
 // transactions decoded fine.
-func (c *ClickHouse) writeBlockTxs(hash common.Hash, txs []*types.Transaction, tfs time.Time) {
+func (c *ClickHouse) writeBlockTxs(hash common.Hash, txHashes []common.Hash, tfs time.Time) {
 	blockHash := hash.Hex()
 	seenDate := tfs.UTC().Truncate(24 * time.Hour)
-	for i, tx := range txs {
+	for i, txHash := range txHashes {
 		c.blockTxs.add(chBlockTx{
 			blockHash: blockHash,
 			txIndex:   uint32(i),
-			txHash:    tx.Hash().Hex(),
+			txHash:    txHash.Hex(),
 			seenDate:  seenDate,
 		})
 	}

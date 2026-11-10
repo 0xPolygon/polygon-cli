@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 )
 
 // nodb is a database implementation that does nothing.
@@ -22,7 +24,7 @@ func NoDatabase() Database {
 }
 
 // WriteBlock does nothing.
-func (n *nodb) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (n *nodb) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, txs *bortx.Body, td *big.Int, tfs time.Time) {
 }
 
 // WriteBlockHeaders does nothing.
@@ -38,7 +40,7 @@ func (n *nodb) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.Node, ha
 }
 
 // WriteBlockBody does nothing.
-func (n *nodb) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+func (n *nodb) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 }
 
 // WriteTransactions does nothing.

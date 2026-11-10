@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/0xPolygon/polygon-cli/p2p"
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -492,8 +493,15 @@ func getBlockByNumber(req rpcRequest, conns *p2p.Conns) (any, *rpcError) {
 		hash = head.Block.Hash()
 		cache, found = conns.Blocks().Get(hash)
 		if !found {
-			// Construct cache from head block
+			// Construct cache from head block. Its transactions come from the
+			// decoded body when there is one, since a types.Block cannot hold Bor
+			// state-sync transactions.
 			txList, _ := rlp.EncodeToRawList([]*types.Transaction(head.Block.Transactions()))
+			if head.Txs != nil {
+				if list, err := head.Txs.RawList(); err == nil {
+					txList = list
+				}
+			}
 			uncleList, _ := rlp.EncodeToRawList(head.Block.Uncles())
 			cache = p2p.BlockCache{
 				Header: head.Block.Header(),
@@ -547,13 +555,13 @@ func getTransactionByHash(req rpcRequest, conns *p2p.Conns) (any, *rpcError) {
 		if !ok || cache.Body == nil {
 			continue
 		}
-		txs, err := cache.Body.Transactions.Items()
+		body, err := bortx.DecodeList(&cache.Body.Transactions)
 		if err != nil {
 			continue
 		}
-		for i, tx := range txs {
-			if tx.Hash() == hash {
-				return formatTransactionResponse(tx, blockHash, cache.Header, uint64(i)), nil
+		for i, txHash := range body.Hashes {
+			if txHash == hash {
+				return formatBodyTxResponse(body, i, blockHash, cache.Header), nil
 			}
 		}
 	}
@@ -588,13 +596,12 @@ func getTransactionByBlockHashAndIndex(req rpcRequest, conns *p2p.Conns) (any, *
 		return nil, nil
 	}
 
-	txs, err := cache.Body.Transactions.Items()
-	if err != nil || int(index) >= len(txs) {
+	body, err := bortx.DecodeList(&cache.Body.Transactions)
+	if err != nil || index >= uint64(len(body.Hashes)) {
 		return nil, nil
 	}
 
-	tx := txs[index]
-	return formatTransactionResponse(tx, blockHash, cache.Header, index), nil
+	return formatBodyTxResponse(body, int(index), blockHash, cache.Header), nil
 }
 
 // getBlockCacheByHashParam parses a block hash from params[0] and returns the block cache.
@@ -691,18 +698,21 @@ func formatBlockResponse(hash common.Hash, cache p2p.BlockCache, fullTx bool) ma
 	}
 
 	// Add transactions
-	if cache.Body != nil && cache.Body.Transactions.Len() > 0 {
-		txs, _ := cache.Body.Transactions.Items()
+	body, err := decodeCachedBody(cache)
+	if err != nil {
+		log.Warn().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode cached block body")
+	}
+	if body != nil && len(body.Hashes) > 0 {
 		if fullTx {
-			txResults := make([]map[string]any, len(txs))
-			for i, tx := range txs {
-				txResults[i] = formatTransactionResponse(tx, hash, header, uint64(i))
+			txResults := make([]map[string]any, len(body.Hashes))
+			for i := range body.Hashes {
+				txResults[i] = formatBodyTxResponse(body, i, hash, header)
 			}
 			result["transactions"] = txResults
 		} else {
-			txHashes := make([]string, len(txs))
-			for i, tx := range txs {
-				txHashes[i] = tx.Hash().Hex()
+			txHashes := make([]string, len(body.Hashes))
+			for i, txHash := range body.Hashes {
+				txHashes[i] = txHash.Hex()
 			}
 			result["transactions"] = txHashes
 		}
@@ -725,6 +735,54 @@ func formatBlockResponse(hash common.Hash, cache p2p.BlockCache, fullTx bool) ma
 	// Add size (approximate based on header + body)
 	result["size"] = hexutil.EncodeUint64(0) // We don't have exact size; use 0
 
+	return result
+}
+
+// decodeCachedBody decodes the transactions of a cached block body, or returns
+// nil if the block has no body yet.
+func decodeCachedBody(cache p2p.BlockCache) (*bortx.Body, error) {
+	if cache.Body == nil {
+		return nil, nil
+	}
+	return bortx.DecodeList(&cache.Body.Transactions)
+}
+
+// formatBodyTxResponse formats the transaction at body index i. A Bor state-sync
+// transaction has no go-ethereum form, so it is returned the way Bor's own RPC
+// returns one: type 0x7f with zero sender, recipient, gas, value and signature.
+// Every index is answerable, so the hash list, the transaction count and the
+// per-transaction lookups agree.
+func formatBodyTxResponse(body *bortx.Body, i int, blockHash common.Hash, header *types.Header) map[string]any {
+	if tx := body.Tx(i); tx != nil {
+		return formatTransactionResponse(tx, blockHash, header, uint64(i))
+	}
+
+	zero := hexutil.EncodeUint64(0)
+	result := map[string]any{
+		"hash":                 body.Hashes[i].Hex(),
+		"type":                 hexutil.EncodeUint64(bortx.StateSyncTxType),
+		"from":                 common.Address{}.Hex(),
+		"to":                   common.Address{}.Hex(),
+		"nonce":                zero,
+		"gas":                  zero,
+		"gasPrice":             zero,
+		"maxFeePerGas":         zero,
+		"maxPriorityFeePerGas": zero,
+		"value":                zero,
+		"input":                "0x",
+		"v":                    zero,
+		"r":                    zero,
+		"s":                    zero,
+		"yParity":              zero,
+		"blockHash":            nil,
+		"blockNumber":          nil,
+		"transactionIndex":     nil,
+	}
+	if header != nil {
+		result["blockHash"] = blockHash.Hex()
+		result["blockNumber"] = hexutil.EncodeUint64(header.Number.Uint64())
+		result["transactionIndex"] = hexutil.EncodeUint64(uint64(i))
+	}
 	return result
 }
 

@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 )
 
 // BlockAnnouncement is an announced block hash with its height, as carried by eth
@@ -40,8 +42,10 @@ type Database interface {
 	// written if ShouldWriteBlocks returns true; the event is written if either
 	// ShouldWriteBlockEvents or ShouldWriteFirstBlockEvent returns true, because
 	// a whole-block delivery is one event per block per sensor and is the only
-	// place a block first seen this way is observed.
-	WriteBlock(context.Context, *enode.Node, *types.Block, *big.Int, time.Time)
+	// place a block first seen this way is observed. Transaction facts come
+	// from txs, the decoded body: the *types.Block cannot hold Bor state-sync
+	// transactions.
+	WriteBlock(context.Context, *enode.Node, *types.Block, *bortx.Body, *big.Int, time.Time)
 
 	// WriteBlockHeaders will write the block headers if ShouldWriteBlocks
 	// returns true.
@@ -66,7 +70,7 @@ type Database interface {
 	// separate transactions table (e.g. ClickHouse) gate this on
 	// ShouldWriteTransactions; the Datastore backend gates on ShouldWriteBlocks
 	// because it links the transactions and uncles onto the block entity.
-	WriteBlockBody(context.Context, *eth.BlockBody, BlockAnnouncement, time.Time)
+	WriteBlockBody(context.Context, *eth.BlockBody, *bortx.Body, BlockAnnouncement, time.Time)
 
 	// WriteTransactions writes the transaction bodies if ShouldWriteTransactions
 	// returns true. Transaction events are recorded separately via

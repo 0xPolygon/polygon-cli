@@ -14,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/api/iterator"
+
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 )
 
 const (
@@ -190,7 +192,7 @@ func (d *Datastore) recordsBlockEvents() bool {
 }
 
 // WriteBlock writes the block and the block event to datastore.
-func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, td *big.Int, tfs time.Time) {
+func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, txs *bortx.Body, td *big.Int, tfs time.Time) {
 	if d.client == nil {
 		return
 	}
@@ -203,7 +205,7 @@ func (d *Datastore) WriteBlock(ctx context.Context, peer *enode.Node, block *typ
 
 	if d.ShouldWriteBlocks() {
 		d.runAsync(func() {
-			d.writeBlock(ctx, block, td, tfs)
+			d.writeBlock(ctx, block, txs, td, tfs)
 		})
 	}
 }
@@ -230,14 +232,14 @@ func (d *Datastore) WriteBlockHeaders(ctx context.Context, headers []*types.Head
 // requested. The block events will be written when the hash is received
 // instead. It will write the uncles and transactions to datastore if they
 // don't already exist.
-func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, ann BlockAnnouncement, tfs time.Time) {
+func (d *Datastore) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 	hash := ann.Hash
 	if d.client == nil || !d.ShouldWriteBlocks() {
 		return
 	}
 
 	d.runAsync(func() {
-		d.writeBlockBody(ctx, body, hash, tfs)
+		d.writeBlockBody(ctx, body, txs, hash, tfs)
 	})
 }
 
@@ -464,7 +466,7 @@ func (d *Datastore) newDatastoreTransaction(tx *types.Transaction, tfs time.Time
 	}
 }
 
-func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.Int, tfs time.Time) {
+func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, txs *bortx.Body, td *big.Int, tfs time.Time) {
 	key := datastore.NameKey(BlocksKind, block.Hash().Hex(), nil)
 
 	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
@@ -492,16 +494,12 @@ func (d *Datastore) writeBlock(ctx context.Context, block *types.Block, td *big.
 			dsBlock.TotalDifficulty = td.String()
 		}
 
-		if dsBlock.Transactions == nil && len(block.Transactions()) > 0 {
+		if dsBlock.Transactions == nil && len(txs.Hashes) > 0 {
 			modified = true
 			if d.shouldWriteTransactions {
-				d.writeTransactions(ctx, block.Transactions(), tfs)
+				d.writeTransactions(ctx, txs.Txs, tfs)
 			}
-
-			dsBlock.Transactions = make([]*datastore.Key, 0, len(block.Transactions()))
-			for _, tx := range block.Transactions() {
-				dsBlock.Transactions = append(dsBlock.Transactions, datastore.NameKey(TransactionsKind, tx.Hash().Hex(), nil))
-			}
+			dsBlock.Transactions = transactionKeys(txs.Hashes)
 		}
 
 		if dsBlock.Uncles == nil && len(block.Uncles()) > 0 {
@@ -598,7 +596,7 @@ func (d *Datastore) writeBlockHeader(ctx context.Context, header *types.Header, 
 	}
 }
 
-func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, hash common.Hash, tfs time.Time) {
+func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, hash common.Hash, tfs time.Time) {
 	key := datastore.NameKey(BlocksKind, hash.Hex(), nil)
 
 	_, err := d.client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
@@ -609,20 +607,12 @@ func (d *Datastore) writeBlockBody(ctx context.Context, body *eth.BlockBody, has
 
 		modified := false
 
-		if block.Transactions == nil && body.Transactions.Len() > 0 {
-			txs, err := body.Transactions.Items()
-			if err != nil {
-				log.Error().Err(err).Str("hash", hash.Hex()).Msg("Failed to decode transactions from block body")
-			} else {
-				modified = true
-				if d.shouldWriteTransactions {
-					d.writeTransactions(ctx, txs, tfs)
-				}
-				block.Transactions = make([]*datastore.Key, 0, len(txs))
-				for _, tx := range txs {
-					block.Transactions = append(block.Transactions, datastore.NameKey(TransactionsKind, tx.Hash().Hex(), nil))
-				}
+		if block.Transactions == nil && len(txs.Hashes) > 0 {
+			modified = true
+			if d.shouldWriteTransactions {
+				d.writeTransactions(ctx, txs.Txs, tfs)
 			}
+			block.Transactions = transactionKeys(txs.Hashes)
 		}
 
 		if block.Uncles == nil && body.Uncles.Len() > 0 {
@@ -735,4 +725,14 @@ func (d *Datastore) Close() error {
 		d.jobs <- struct{}{}
 	}
 	return d.client.Close()
+}
+
+// transactionKeys returns a key per transaction hash, in body order. The hashes
+// include Bor state-sync transactions, which have no transaction entity.
+func transactionKeys(hashes []common.Hash) []*datastore.Key {
+	keys := make([]*datastore.Key, 0, len(hashes))
+	for _, hash := range hashes {
+		keys = append(keys, datastore.NameKey(TransactionsKind, hash.Hex(), nil))
+	}
+	return keys
 }

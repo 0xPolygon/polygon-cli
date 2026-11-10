@@ -237,7 +237,7 @@ func TestHandleGetBlockBodiesServesOnlyComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode raw body: %v", err)
 	}
-	body, err := c.buildBlockBody(emptyRawBody)
+	body, _, err := c.buildBlockBody(emptyRawBody)
 	if err != nil {
 		t.Fatalf("build body: %v", err)
 	}

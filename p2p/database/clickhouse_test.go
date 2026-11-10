@@ -16,6 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/0xPolygon/polygon-cli/p2p/bortx"
 )
 
 // Test block heights live in a reserved band far above any real chain head, one
@@ -35,6 +38,7 @@ const (
 	heightTotalDiff       = 900_000_050
 	heightLowercase       = 900_000_060
 	heightHeaderEvents    = 900_000_070
+	heightStateSync       = 900_000_080
 )
 
 // cleanupTestHeights removes everything the given test heights produced, in
@@ -209,7 +213,7 @@ func TestClickHouseWrites(t *testing.T) {
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
 	peer := testPeer(t)
 
-	db.WriteBlock(ctx, peer, block, big.NewInt(100), now)
+	db.WriteBlock(ctx, peer, block, txsOf(t, block), big.NewInt(100), now)
 	db.WriteTransactions(ctx, peer, []*types.Transaction{tx}, now)
 	db.WritePeers(ctx, nil, now) // empty peer slice is fine; exercises the path
 
@@ -323,7 +327,7 @@ func TestClickHouseHeaderDoesNotClobberBody(t *testing.T) {
 
 	// Full block first, then the same header again a second later -- the ordering
 	// that used to lose the counts.
-	db.WriteBlock(ctx, peer, block, big.NewInt(100), now)
+	db.WriteBlock(ctx, peer, block, txsOf(t, block), big.NewInt(100), now)
 	db.WriteBlockHeaders(ctx, []*types.Header{block.Header()}, now.Add(time.Second), true)
 
 	if cerr := db.Close(); cerr != nil {
@@ -449,7 +453,7 @@ func TestClickHouseProductionFlagsRecordProvenance(t *testing.T) {
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
 	peer := testPeer(t)
 
-	db.WriteBlock(ctx, peer, block, big.NewInt(555), now)
+	db.WriteBlock(ctx, peer, block, txsOf(t, block), big.NewInt(555), now)
 	db.WriteBlockHeaders(ctx, []*types.Header{header}, now, false)
 	db.WriteTransactions(ctx, peer, []*types.Transaction{tx}, now)
 
@@ -545,7 +549,7 @@ func TestClickHouseTotalDifficultySurvivesEventExpiry(t *testing.T) {
 	block := types.NewBlockWithHeader(header)
 	wantTD := big.NewInt(987654321)
 
-	db.WriteBlock(ctx, testPeer(t), block, wantTD, now)
+	db.WriteBlock(ctx, testPeer(t), block, txsOf(t, block), wantTD, now)
 	if cerr := db.Close(); cerr != nil {
 		t.Fatalf("close db: %v", cerr)
 	}
@@ -620,7 +624,7 @@ func TestAddressesAreStoredLowercase(t *testing.T) {
 	wantFrom := strings.ToLower(crypto.PubkeyToAddress(senderKey.PublicKey).Hex())
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
 
-	db.WriteBlock(ctx, testPeer(t), block, big.NewInt(1), now)
+	db.WriteBlock(ctx, testPeer(t), block, txsOf(t, block), big.NewInt(1), now)
 	db.WriteTransactions(ctx, testPeer(t), []*types.Transaction{tx}, now)
 	if cerr := db.Close(); cerr != nil {
 		t.Fatalf("close db: %v", cerr)
@@ -771,7 +775,7 @@ func TestUnavailableBackendKeepsWarning(t *testing.T) {
 	tx1 := types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()), GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)})
 	tx2 := types.NewTx(&types.LegacyTx{Nonce: uint64(now.UnixNano()) + 1, GasPrice: big.NewInt(1), Gas: 21_000, Value: big.NewInt(1)})
 	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx1, tx2}})
-	db.WriteBlock(ctx, testPeer(t), block, big.NewInt(1), now)
+	db.WriteBlock(ctx, testPeer(t), block, txsOf(t, block), big.NewInt(1), now)
 	// 4 block-level rows (blocks, block_bodies, block_total_difficulty, the event)
 	// plus block_txs and transactions per transaction.
 	if got := ch.discarded.Load(); got != 8 {
@@ -784,5 +788,112 @@ func TestUnavailableBackendKeepsWarning(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("Close hung: the warning goroutine is not stopping on cancel")
+	}
+}
+
+// txsOf returns a block's transactions decoded as WriteBlock takes them.
+func txsOf(t *testing.T, block *types.Block) *bortx.Body {
+	t.Helper()
+	list, err := rlp.EncodeToRawList([]*types.Transaction(block.Transactions()))
+	if err != nil {
+		t.Fatalf("encode transactions: %v", err)
+	}
+	txs, err := bortx.DecodeList(&list)
+	if err != nil {
+		t.Fatalf("decode transactions: %v", err)
+	}
+	return txs
+}
+
+// stateSyncTxItem returns a Bor state-sync transaction (type 0x7f) as a block
+// body carries it, and its hash.
+func stateSyncTxItem(t *testing.T, id uint64) (rlp.RawValue, common.Hash) {
+	t.Helper()
+	payload, err := rlp.EncodeToBytes([]struct {
+		ID       uint64
+		Contract common.Address
+		Data     []byte
+		TxHash   common.Hash
+	}{{ID: id, Contract: common.Address{0x01}, Data: []byte{0x02}, TxHash: common.Hash{0x03}}})
+	if err != nil {
+		t.Fatalf("encode state-sync payload: %v", err)
+	}
+	binary := append([]byte{0x7f}, payload...)
+	item, err := rlp.EncodeToBytes(binary)
+	if err != nil {
+		t.Fatalf("encode state-sync item: %v", err)
+	}
+	return item, crypto.Keccak256Hash(binary)
+}
+
+// TestClickHouseWritesBodyWithStateSyncTx is the regression test for blocks Bor
+// produces with a state-sync transaction (type 0x7f) last in the body. go-ethereum
+// cannot decode it, which used to drop the whole block; it must instead count
+// towards tx_count and keep its block_txs index, while only the transactions
+// go-ethereum can decode get a transactions row.
+func TestClickHouseWritesBodyWithStateSyncTx(t *testing.T) {
+	dsn := clickHouseDSN(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	db := newTestClickHouse(t, dsn, ctx)
+
+	now := time.Now().UTC()
+	header, _ := signedHeader(t, heightStateSync, now)
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    uint64(now.UnixNano()),
+		GasPrice: big.NewInt(2_000_000_000),
+		Gas:      21_000,
+		Value:    big.NewInt(1),
+	})
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: []*types.Transaction{tx}})
+	list, err := rlp.EncodeToRawList([]*types.Transaction(block.Transactions()))
+	if err != nil {
+		t.Fatalf("encode transactions: %v", err)
+	}
+	stateSync, stateSyncHash := stateSyncTxItem(t, uint64(now.UnixNano()))
+	if err = list.AppendRaw(stateSync); err != nil {
+		t.Fatalf("append state-sync tx: %v", err)
+	}
+	txs, err := bortx.DecodeList(&list)
+	if err != nil {
+		t.Fatalf("decode transactions: %v", err)
+	}
+
+	db.WriteBlock(ctx, testPeer(t), block, txs, big.NewInt(1), now)
+	if cerr := db.Close(); cerr != nil {
+		t.Fatalf("close db: %v", cerr)
+	}
+
+	conn := verifyConn(t, dsn)
+	cleanupTestHeights(t, conn, heightStateSync)
+	blockHash := block.Hash().Hex()
+
+	var txCount uint32
+	if err := conn.QueryRow(context.Background(),
+		"SELECT tx_count FROM block_bodies FINAL WHERE hash = ?", blockHash).Scan(&txCount); err != nil {
+		t.Fatalf("scan block_bodies: %v", err)
+	}
+	if txCount != 2 {
+		t.Fatalf("tx_count = %d, want 2 (the state-sync transaction counts)", txCount)
+	}
+
+	var stateSyncIndex uint32
+	if err := conn.QueryRow(context.Background(),
+		"SELECT tx_index FROM block_txs FINAL WHERE block_hash = ? AND tx_hash = ?", blockHash, stateSyncHash.Hex()).Scan(&stateSyncIndex); err != nil {
+		t.Fatalf("scan state-sync block_txs row: %v", err)
+	}
+	if stateSyncIndex != 1 {
+		t.Fatalf("state-sync tx_index = %d, want 1", stateSyncIndex)
+	}
+
+	checkCount(t, conn, "SELECT count() FROM transactions WHERE hash = ?", tx.Hash().Hex())
+	var stateSyncRows uint64
+	if err := conn.QueryRow(context.Background(),
+		"SELECT count() FROM transactions WHERE hash = ?", stateSyncHash.Hex()).Scan(&stateSyncRows); err != nil {
+		t.Fatalf("count state-sync transactions rows: %v", err)
+	}
+	if stateSyncRows != 0 {
+		t.Fatalf("state-sync transaction got %d transactions rows, want 0", stateSyncRows)
 	}
 }
