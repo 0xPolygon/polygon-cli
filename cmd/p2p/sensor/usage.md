@@ -14,8 +14,9 @@ if the sensor is not discovering peers.
 
 The ClickHouse backend is append-only and batched. Select it with
 `--database=clickhouse` and pass `--clickhouse-dsn`. The Google Cloud Datastore
-backend is retired; `--project-id`, `--database-id` and `--ttl` are still accepted
-but do nothing. The ClickHouse DDL lives in `clickhouse/schema.sql` in the
+backend has been removed: `--database=datastore` now fails, so switch to
+`--database=clickhouse`. `--project-id`, `--database-id` and `--ttl` only applied
+to Datastore; they are deprecated and ignored. The ClickHouse DDL lives in `clickhouse/schema.sql` in the
 sensor-network-tools repo, not here.
 
 ## JSON-RPC Server

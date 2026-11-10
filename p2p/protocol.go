@@ -1083,6 +1083,12 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 
 	c.countMsgReceived((*eth.BlockHeadersRequest)(nil).Name(), float64(len(headers)))
 
+	// Write any body that arrived before its header, now that it can be checked.
+	// This runs first so a failed parent fetch below cannot leave it held.
+	for _, header := range headers {
+		c.releasePendingBody(ctx, header)
+	}
+
 	for _, header := range headers {
 		if err := c.getParentBlock(ctx, header); err != nil {
 			return err
@@ -1093,11 +1099,6 @@ func (c *conn) handleBlockHeaders(ctx context.Context, msg ethp2p.Msg) error {
 	_, isParent := c.parents.Remove(headers[0].Hash())
 
 	c.db.WriteBlockHeaders(ctx, headers, tfs, isParent)
-
-	// Write any body that arrived before its header, now that it can be checked.
-	for _, header := range headers {
-		c.releasePendingBody(ctx, header)
-	}
 
 	// Cache each header and, for the announced header, perform the deferred
 	// signer-validated hash rebroadcast.
@@ -1228,9 +1229,11 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	hash := ann.Hash
 	c.requests.Remove(packet.RequestId)
 
-	// Check if we already have the body in the cache
+	// Skip a body the cache already holds checked against its header. A body
+	// cached before its header arrived is unchecked and may be wrong, so this one
+	// still goes through the gate below.
 	cached, inCache := c.conns.Blocks().Peek(hash)
-	if inCache && cached.Body != nil {
+	if inCache && cached.Body != nil && cached.Header != nil {
 		return nil
 	}
 
@@ -1252,7 +1255,7 @@ func (c *conn) handleBlockBodies(ctx context.Context, msg ethp2p.Msg) error {
 	// cached (cacheAndAnnounceHeader).
 	root := txs.Root()
 	if inCache && cached.Header != nil {
-		c.conns.bodies.headerSeen(hash, cached.Header.TxHash)
+		c.releasePendingBody(ctx, cached.Header)
 	}
 	want, known := c.conns.bodies.bodyArrived(hash, pendingBody{body: body, txs: txs, ann: ann, tfs: tfs, root: root})
 	if known {
@@ -1331,15 +1334,14 @@ func blockFromRaw(raw rawBlock, txs *bortx.Body) (*types.Block, error) {
 // before it, if there is one and it matches. A body that does not match is
 // dropped unwritten.
 func (c *conn) releasePendingBody(ctx context.Context, header *types.Header) {
-	pending, ok := c.conns.bodies.headerSeen(header.Hash(), header.TxHash)
-	if !ok {
-		return
+	hash := header.Hash()
+	pending, ok, dropped := c.conns.bodies.headerSeen(hash, header.TxHash)
+	for _, root := range dropped {
+		c.logBodyRootMismatch(hash, header.TxHash, root)
 	}
-	if pending.root != header.TxHash {
-		c.logBodyRootMismatch(header.Hash(), header.TxHash, pending.root)
-		return
+	if ok {
+		c.db.WriteBlockBody(ctx, pending.body, pending.txs, pending.ann, pending.tfs)
 	}
-	c.db.WriteBlockBody(ctx, pending.body, pending.txs, pending.ann, pending.tfs)
 }
 
 // logBodyRootMismatch logs a block body dropped for not matching its header.
@@ -1422,9 +1424,9 @@ func (c *conn) handleNewBlock(ctx context.Context, msg ethp2p.Msg) error {
 	tfs := time.Now()
 	hash := packet.Block.Hash()
 
-	// The NewBlock's own body, checked above, is what gets written below, so a
-	// body for the same block still waiting for its header is not needed.
-	c.conns.bodies.headerSeen(hash, packet.Block.TxHash())
+	// Release a body for this block that arrived before its header. It is written
+	// now if it matches, so it is not lost if this handler returns early below.
+	c.releasePendingBody(ctx, packet.Block.Header())
 
 	c.countMsgReceived(packet.Name(), 1)
 

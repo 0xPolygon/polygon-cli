@@ -557,6 +557,8 @@ func newDatabase(ctx context.Context) (database.Database, error) {
 		}), nil
 	case "none":
 		return database.NoDatabase(), nil
+	case "datastore":
+		return nil, errors.New("the Datastore backend has been removed; use --database=clickhouse with --clickhouse-dsn")
 	default:
 		return nil, fmt.Errorf("invalid database option: %s", inputSensorParams.Database)
 	}
@@ -567,8 +569,8 @@ func init() {
 	f.StringVarP(&inputSensorParams.Bootnodes, "bootnodes", "b", "", "comma separated nodes used for bootstrapping")
 	f.Uint64VarP(&inputSensorParams.NetworkID, "network-id", "n", 0, "filter discovered nodes by this network ID")
 	flag.MarkFlagsRequired(SensorCmd, "network-id")
-	// The Datastore backend is retired. Its flags are still accepted so existing
-	// invocations keep parsing, but they do nothing.
+	// The Datastore backend is retired and --database=datastore is rejected.
+	// These flags only applied to it; they are deprecated and ignored.
 	f.StringVarP(&inputSensorParams.ProjectID, "project-id", "p", "", "GCP project ID")
 	f.StringVarP(&inputSensorParams.DatabaseID, "database-id", "d", "", "datastore database ID")
 	flag.MarkDeprecated(SensorCmd, "project-id", "the Datastore backend is retired; use --database=clickhouse")

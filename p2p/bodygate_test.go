@@ -15,7 +15,7 @@ func TestBodyGateHeaderFirst(t *testing.T) {
 	g := newBodyGate(ds.LRUOptions{MaxSize: 16})
 	hash, root := common.Hash{1}, common.Hash{2}
 
-	if _, ok := g.headerSeen(hash, root); ok {
+	if _, ok, _ := g.headerSeen(hash, root); ok {
 		t.Fatal("headerSeen released a body that never arrived")
 	}
 	got, known := g.bodyArrived(hash, pendingBody{root: root})
@@ -31,11 +31,11 @@ func TestBodyGateBodyFirst(t *testing.T) {
 	if _, known := g.bodyArrived(hash, pendingBody{root: root}); known {
 		t.Fatal("bodyArrived reported a header that was never seen")
 	}
-	pending, ok := g.headerSeen(hash, root)
+	pending, ok, _ := g.headerSeen(hash, root)
 	if !ok || pending.root != root {
 		t.Fatal("headerSeen did not release the waiting body")
 	}
-	if _, ok := g.headerSeen(hash, root); ok {
+	if _, ok, _ := g.headerSeen(hash, root); ok {
 		t.Fatal("a body was released twice")
 	}
 }
@@ -53,7 +53,7 @@ func TestBodyGateRaceNeverLosesABody(t *testing.T) {
 		var bodyKnown, released bool
 		var wg sync.WaitGroup
 		wg.Go(func() { _, bodyKnown = g.bodyArrived(hash, pendingBody{}) })
-		wg.Go(func() { _, released = g.headerSeen(hash, common.Hash{}) })
+		wg.Go(func() { _, released, _ = g.headerSeen(hash, common.Hash{}) })
 		wg.Wait()
 		switch {
 		case !bodyKnown && !released:
@@ -64,5 +64,42 @@ func TestBodyGateRaceNeverLosesABody(t *testing.T) {
 	}
 	if lost.Load() != 0 || twice.Load() != 0 {
 		t.Fatalf("lost %d bodies and handled %d twice over %d rounds", lost.Load(), twice.Load(), rounds)
+	}
+}
+
+// TestBodyGateKeepsFirstBodyPerRoot is the regression test for a later body
+// replacing a held one: a wrong body arriving second must not displace the one
+// that matches the header.
+func TestBodyGateKeepsFirstBodyPerRoot(t *testing.T) {
+	g := newBodyGate(ds.LRUOptions{MaxSize: 16})
+	hash, good, bad := common.Hash{1}, common.Hash{2}, common.Hash{3}
+
+	g.bodyArrived(hash, pendingBody{root: good})
+	g.bodyArrived(hash, pendingBody{root: bad})
+	pending, ok, dropped := g.headerSeen(hash, good)
+	if !ok || pending.root != good {
+		t.Fatal("the matching body was not released")
+	}
+	if len(dropped) != 1 || dropped[0] != bad {
+		t.Fatalf("dropped = %v, want only the wrong body's root", dropped)
+	}
+}
+
+// TestBodyGateBoundsBodiesPerBlock checks that at most maxPendingBodiesPerBlock
+// distinct bodies are held for a block, and that a repeat of a held body is not
+// counted again.
+func TestBodyGateBoundsBodiesPerBlock(t *testing.T) {
+	g := newBodyGate(ds.LRUOptions{MaxSize: 16})
+	hash := common.Hash{1}
+	for i := range maxPendingBodiesPerBlock + 3 {
+		g.bodyArrived(hash, pendingBody{root: common.BigToHash(big.NewInt(int64(i + 1)))})
+		g.bodyArrived(hash, pendingBody{root: common.BigToHash(big.NewInt(1))})
+	}
+	_, ok, dropped := g.headerSeen(hash, common.BigToHash(big.NewInt(1)))
+	if !ok {
+		t.Fatal("the first body was not kept")
+	}
+	if len(dropped) != maxPendingBodiesPerBlock-1 {
+		t.Fatalf("held %d other bodies, want %d", len(dropped), maxPendingBodiesPerBlock-1)
 	}
 }

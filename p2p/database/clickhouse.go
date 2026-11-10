@@ -478,10 +478,24 @@ func (c *ClickHouse) recordsTxEvents() bool {
 
 func (c *ClickHouse) WriteBlock(ctx context.Context, peer *enode.Node, block *types.Block, txs *bortx.Body, td *big.Int, tfs time.Time) {
 	if c.conn == nil {
-		// blocks + block_bodies + block_total_difficulty + the event, then one
-		// block_txs row per transaction and one transactions row per transaction
-		// that is not a Bor state-sync transaction.
-		c.discarded.Add(4 + uint64(len(txs.Hashes)) + uint64(len(txs.Txs)))
+		// The same rows the writes below would produce: the event; blocks,
+		// block_bodies, block_total_difficulty and one block_txs row per
+		// transaction; and one transactions row per transaction that is not a Bor
+		// state-sync one.
+		var n uint64
+		if c.recordsBlockEvents() && peer != nil {
+			n++
+		}
+		if c.shouldWriteBlocks {
+			n += 2 + uint64(len(txs.Hashes))
+			if td != nil && td.Sign() > 0 {
+				n++
+			}
+		}
+		if c.shouldWriteTransactions {
+			n += uint64(len(txs.Txs))
+		}
+		c.discarded.Add(n)
 		return
 	}
 	// Which peer announced which total difficulty is an observation, so it rides on
@@ -534,11 +548,19 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 	// off recorded new_block, body, hash_announce and full_tx but silently dropped
 	// header timing and the backfill marker -- and headers are still requested in
 	// that configuration, so the events were produced and thrown away.
-	if c.conn == nil {
-		c.discarded.Add(uint64(len(headers)))
+	if !c.shouldWriteBlocks && !c.recordsBlockEvents() {
 		return
 	}
-	if !c.shouldWriteBlocks && !c.recordsBlockEvents() {
+	if c.conn == nil {
+		// A blocks row and an event per header, as enabled.
+		var perHeader uint64
+		if c.shouldWriteBlocks {
+			perHeader++
+		}
+		if c.recordsBlockEvents() {
+			perHeader++
+		}
+		c.discarded.Add(perHeader * uint64(len(headers)))
 		return
 	}
 	source := srcHeader
@@ -569,11 +591,11 @@ func (c *ClickHouse) WriteBlockHeaders(ctx context.Context, headers []*types.Hea
 // answerable. It is written on arrival, whether or not the body later checks
 // out against its header, because the arrival is an observation either way.
 func (c *ClickHouse) WriteBlockBodyArrival(ctx context.Context, ann BlockAnnouncement, tfs time.Time) {
-	if c.conn == nil {
-		c.discarded.Add(1)
+	if !c.recordsBlockEvents() {
 		return
 	}
-	if !c.recordsBlockEvents() {
+	if c.conn == nil {
+		c.discarded.Add(1)
 		return
 	}
 	c.blockEvt.add(chBlockEvent{
@@ -587,9 +609,17 @@ func (c *ClickHouse) WriteBlockBodyArrival(ctx context.Context, ann BlockAnnounc
 
 func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, txs *bortx.Body, ann BlockAnnouncement, tfs time.Time) {
 	if c.conn == nil {
-		// block_bodies, then one block_txs row per transaction and one
-		// transactions row per transaction that is not a Bor state-sync one.
-		c.discarded.Add(1 + uint64(len(txs.Hashes)) + uint64(len(txs.Txs)))
+		// block_bodies plus one block_txs row per transaction, and one
+		// transactions row per transaction that is not a Bor state-sync one,
+		// counting only the tables this sensor writes.
+		var n uint64
+		if c.shouldWriteBlocks {
+			n += 1 + uint64(len(txs.Hashes))
+		}
+		if c.shouldWriteTransactions {
+			n += uint64(len(txs.Txs))
+		}
+		c.discarded.Add(n)
 		return
 	}
 	hash := ann.Hash
@@ -618,11 +648,11 @@ func (c *ClickHouse) WriteBlockBody(ctx context.Context, body *eth.BlockBody, tx
 }
 
 func (c *ClickHouse) WriteBlockEvents(ctx context.Context, peer *enode.Node, anns []BlockAnnouncement, tfs time.Time) {
-	if c.conn == nil {
-		c.discarded.Add(uint64(len(anns)))
+	if peer == nil {
 		return
 	}
-	if peer == nil {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(anns)))
 		return
 	}
 	nodeID := peer.ID().String()
@@ -644,11 +674,11 @@ func (c *ClickHouse) WriteBlockHashFirstSeen(ctx context.Context, peer *enode.No
 }
 
 func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Node, hashes []common.Hash, tfs time.Time) {
-	if c.conn == nil {
-		c.discarded.Add(uint64(len(hashes)))
+	if peer == nil {
 		return
 	}
-	if peer == nil {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(hashes)))
 		return
 	}
 	nodeID := peer.ID().String()
@@ -664,7 +694,15 @@ func (c *ClickHouse) WriteTransactionEvents(ctx context.Context, peer *enode.Nod
 
 func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, txs []*types.Transaction, tfs time.Time) {
 	if c.conn == nil {
-		c.discarded.Add(uint64(len(txs)))
+		// A full_tx event and a transactions row per transaction, as enabled.
+		var n uint64
+		if c.recordsTxEvents() && peer != nil {
+			n += uint64(len(txs))
+		}
+		if c.shouldWriteTransactions {
+			n += uint64(len(txs))
+		}
+		c.discarded.Add(n)
 		return
 	}
 	// A delivered body is a distinct event from a hash announcement, and worth
@@ -688,11 +726,11 @@ func (c *ClickHouse) WriteTransactions(ctx context.Context, peer *enode.Node, tx
 }
 
 func (c *ClickHouse) WritePeers(ctx context.Context, peers []*p2p.Peer, tls time.Time) {
-	if c.conn == nil {
-		c.discarded.Add(uint64(len(peers)))
+	if !c.shouldWritePeers {
 		return
 	}
-	if !c.shouldWritePeers {
+	if c.conn == nil {
+		c.discarded.Add(uint64(len(peers)))
 		return
 	}
 	// node_id matches what the event streams record, so peers and events are
@@ -768,8 +806,6 @@ func (c *ClickHouse) HasBlock(ctx context.Context, hash common.Hash) bool {
 	return exists == 1
 }
 
-// NodeList returns the most recently seen peers' enode URLs, from the narrow
-// peers_current rollup rather than grouping over the event firehose.
 // ClickHouseNodeList returns the URLs of the most recently seen peers in the
 // sensor database at dsn. Unlike NewClickHouse, which discards everything when
 // it cannot connect so the sensor keeps running, it fails, so an unreachable
@@ -787,6 +823,8 @@ func ClickHouseNodeList(ctx context.Context, dsn string, limit int) ([]string, e
 	return (&ClickHouse{conn: conn}).NodeList(ctx, limit)
 }
 
+// NodeList returns the most recently seen peers' enode URLs, from the narrow
+// peers_current rollup rather than grouping over the event firehose.
 func (c *ClickHouse) NodeList(ctx context.Context, limit int) ([]string, error) {
 	if c.conn == nil {
 		return []string{}, nil

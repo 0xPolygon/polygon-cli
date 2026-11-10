@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"math/big"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	ethp2p "github.com/ethereum/go-ethereum/p2p"
@@ -245,8 +247,7 @@ func TestBodyBeforeHeaderIsCheckedWhenHeaderArrives(t *testing.T) {
 	block := loadStateSyncBlock(t)
 	hash := block.Header.Hash()
 	conns := sharedTestConns(t, false)
-	// The test Conns is shared; start with neither header nor body seen.
-	conns.bodies = newBodyGate(ds.LRUOptions{MaxSize: 64})
+	useFreshBodyGate(t, conns)
 	conns.Blocks().Remove(hash)
 
 	c := newTestConn(&recordRW{}, conns)
@@ -299,8 +300,7 @@ func TestBodyIsWrittenOnlyOnceCheckedAgainstHeader(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// The test Conns is shared; start with neither header nor body seen.
-			conns.bodies = newBodyGate(ds.LRUOptions{MaxSize: 64})
+			useFreshBodyGate(t, conns)
 			conns.Blocks().Remove(hash)
 
 			c := newTestConn(&recordRW{}, conns)
@@ -341,7 +341,7 @@ func TestBodyAfterHeaderIsWrittenImmediately(t *testing.T) {
 	block := loadStateSyncBlock(t)
 	hash := block.Header.Hash()
 	conns := sharedTestConns(t, false)
-	conns.bodies = newBodyGate(ds.LRUOptions{MaxSize: 64})
+	useFreshBodyGate(t, conns)
 	conns.Blocks().Remove(hash)
 
 	c := newTestConn(&recordRW{}, conns)
@@ -357,5 +357,112 @@ func TestBodyAfterHeaderIsWrittenImmediately(t *testing.T) {
 	}
 	if db.bodyWrites != 1 {
 		t.Fatalf("body writes = %d, want 1", db.bodyWrites)
+	}
+}
+
+// useFreshBodyGate gives a test an empty body gate on the shared test Conns and
+// restores the previous one when the test ends.
+func useFreshBodyGate(t *testing.T, conns *Conns) {
+	t.Helper()
+	prev := conns.bodies
+	conns.bodies = newBodyGate(ds.LRUOptions{MaxSize: 64})
+	t.Cleanup(func() { conns.bodies = prev })
+}
+
+// failRW fails every write, so a handler's parent-block request fails.
+type failRW struct{ recordRW }
+
+func (*failRW) WriteMsg(ethp2p.Msg) error { return errors.New("write failed") }
+
+// parentFetchDB makes getParentBlock request the parent: block writes are on and
+// no parent is stored.
+type parentFetchDB struct{ *blockWriteDB }
+
+func (parentFetchDB) ShouldWriteBlocks() bool                    { return true }
+func (parentFetchDB) HasBlock(context.Context, common.Hash) bool { return false }
+
+// TestCorrectBodyIsNotShutOutByUncheckedCachedBody is the regression test for a
+// wrong body cached before its header making handleBlockBodies skip the correct
+// body from another peer, so that no body was ever written for the block.
+func TestCorrectBodyIsNotShutOutByUncheckedCachedBody(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	hash := block.Header.Hash()
+	ann := database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()}
+	conns := sharedTestConns(t, false)
+	useFreshBodyGate(t, conns)
+	conns.Blocks().Remove(hash)
+	t.Cleanup(func() { conns.Blocks().Remove(hash) })
+
+	db := &blockWriteDB{Database: database.NoDatabase()}
+	bad := newTestConn(&recordRW{}, conns)
+	bad.db = db
+	bad.requests.Add(1, ann)
+	if err := bad.handleBlockBodies(context.Background(), blockBodiesMsg(t, 1, block.Txs[1:], block.Uncles)); err != nil {
+		t.Fatalf("handleBlockBodies (wrong body): %v", err)
+	}
+	good := newTestConn(&recordRW{}, conns)
+	good.db = db
+	good.requests.Add(2, ann)
+	if err := good.handleBlockBodies(context.Background(), blockBodiesMsg(t, 2, block.Txs, block.Uncles)); err != nil {
+		t.Fatalf("handleBlockBodies (correct body): %v", err)
+	}
+	if err := good.handleBlockHeaders(context.Background(), blockHeadersMsg(t, block.Header)); err != nil {
+		t.Fatalf("handleBlockHeaders: %v", err)
+	}
+	if db.bodyWrites != 1 || len(db.txs.Hashes) != len(block.Txs) {
+		t.Fatalf("body writes = %d, want the correct body written once", db.bodyWrites)
+	}
+}
+
+// TestHeldBodyIsWrittenWhenHeaderHandlerFailsEarly is the regression test for
+// handleBlockHeaders returning on a failed parent request before releasing the
+// bodies held for its headers.
+func TestHeldBodyIsWrittenWhenHeaderHandlerFailsEarly(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	hash := block.Header.Hash()
+	conns := sharedTestConns(t, false)
+	useFreshBodyGate(t, conns)
+	conns.Blocks().Remove(hash)
+	t.Cleanup(func() { conns.Blocks().Remove(hash) })
+
+	db := &blockWriteDB{Database: database.NoDatabase()}
+	c := newTestConn(&failRW{}, conns)
+	c.db = parentFetchDB{db}
+	c.requests.Add(3, database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()})
+	if err := c.handleBlockBodies(context.Background(), blockBodiesMsg(t, 3, block.Txs, block.Uncles)); err != nil {
+		t.Fatalf("handleBlockBodies: %v", err)
+	}
+	if err := c.handleBlockHeaders(context.Background(), blockHeadersMsg(t, block.Header)); err == nil {
+		t.Fatal("handleBlockHeaders succeeded; the test needs the parent request to fail")
+	}
+	if db.bodyWrites != 1 {
+		t.Fatalf("body writes = %d, want the held body written once", db.bodyWrites)
+	}
+}
+
+// TestHeldBodyIsWrittenWhenNewBlockHandlerFailsEarly is the regression test for
+// handleNewBlock discarding a held body and then returning on a failed parent
+// request before writing its own.
+func TestHeldBodyIsWrittenWhenNewBlockHandlerFailsEarly(t *testing.T) {
+	block := loadStateSyncBlock(t)
+	hash := block.Header.Hash()
+	conns := sharedTestConns(t, false)
+	useFreshBodyGate(t, conns)
+	conns.Blocks().Remove(hash)
+	t.Cleanup(func() { conns.Blocks().Remove(hash) })
+
+	db := &blockWriteDB{Database: database.NoDatabase()}
+	c := newTestConn(&failRW{}, conns)
+	c.db = parentFetchDB{db}
+	c.requests.Add(4, database.BlockAnnouncement{Hash: hash, Number: block.Header.Number.Uint64()})
+	if err := c.handleBlockBodies(context.Background(), blockBodiesMsg(t, 4, block.Txs, block.Uncles)); err != nil {
+		t.Fatalf("handleBlockBodies: %v", err)
+	}
+	msg := encodeMsg(t, eth.NewBlockMsg, &rawNewBlockPacket{Block: block, TD: big.NewInt(1)})
+	if err := c.handleNewBlock(context.Background(), msg); err == nil {
+		t.Fatal("handleNewBlock succeeded; the test needs the parent request to fail")
+	}
+	if db.bodyWrites != 1 {
+		t.Fatalf("body writes = %d, want the held body written once", db.bodyWrites)
 	}
 }
